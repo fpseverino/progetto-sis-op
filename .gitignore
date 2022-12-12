@@ -1,3 +1,8 @@
+# Unix Executable Files
+*
+!*.*
+!*/
+
 # Prerequisites
 *.d
 
@@ -50,3 +55,13 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# Program created files
+*.dat
+*.txt
+
+# Mac
+.DS_Store
+
+# VS Code
+*.vscode
