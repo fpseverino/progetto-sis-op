@@ -8,3 +8,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+
+typedef struct {
+    char name[128];
+    unsigned int status;
+} Device;
