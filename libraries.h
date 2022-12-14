@@ -1,3 +1,13 @@
+//
+//  libraries.h
+//  progettoSisOp
+//
+//  Created by Francesco Paolo Severino and Roberto Giovanni Scolari on 13/12/22.
+//
+
+#ifndef LIBRARIES_H
+#define LIBRARIES_H
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -12,4 +22,6 @@
 typedef struct {
     char name[128];
     unsigned int status;
-} Device;
+} Accessory;
+
+#endif
