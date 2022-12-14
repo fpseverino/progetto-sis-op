@@ -21,7 +21,7 @@
 
 typedef struct {
     char name[128];
-    unsigned int status;
+    int status;
 } Accessory;
 
 #endif

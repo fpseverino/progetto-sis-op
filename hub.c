@@ -2,12 +2,13 @@
 
 #define PORT 12345
 #define MAX_CONN 4
-#define BUFF_SIZE 4096
 
 struct sockaddr_in clientAddr;
 
 void addrInit(struct sockaddr_in *address, long IPaddr, int port);
 void * threadHandler(void * clientSocket);
+
+Accessory home[5];
 
 int main() {
     int socketD, newSocketD;
@@ -15,6 +16,17 @@ int main() {
     struct sockaddr_in serverAddr;
     int clientLen = sizeof(clientAddr);
     pthread_t tid;
+
+    strcpy(home[0].name, "Luce1");
+    home[0].status = 0;
+    strcpy(home[1].name, "Luce2");
+    home[1].status = 1;
+    strcpy(home[2].name, "Termostato");
+    home[2].status = 21;
+    strcpy(home[3].name, "Luce3");
+    home[3].status = 1;
+    strcpy(home[4].name, "Luce4");
+    home[4].status = 0;
 
     puts("\n# Inizio del programma\n");
     puts("<SERVER> in esecuzione...");
@@ -45,7 +57,7 @@ int main() {
             perror("Errore accept");
             exit(EXIT_FAILURE);
         }
-        printf("<SERVER> Connessione accettata\n\tPorta locale: %d\n\tPorta client: %d\n", PORT, ntohs(clientAddr.sin_port));
+        printf("<SERVER> Connessione accettata - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
 
         result = pthread_create(&tid, NULL, threadHandler, (void *) &newSocketD);
         if (result != 0) {
@@ -69,13 +81,16 @@ void addrInit(struct sockaddr_in *address, long IPaddr, int port) {
 
 void * threadHandler(void * clientSocket) {
     int socketD = * (int *) clientSocket;
-    char buff[BUFF_SIZE];
-    printf("<Thread> Gestisco connessione\n\tPorta locale: %d\n\tPorta client: %d\n", PORT, ntohs(clientAddr.sin_port));
-    recv(socketD, buff, sizeof(buff), 0);
-    printf("<Thread> Dati ricevuti: %s\n", buff);
-    strcpy(buff, "OK");
-    send(socketD, buff, sizeof(buff), 0);
+    Accessory tempAccessory;
+    printf("<Thread> Gestisco connessione - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
+    recv(socketD, tempAccessory.name, sizeof(tempAccessory.name), 0);
+    printf("<Thread> Dati ricevuti: %s\n", tempAccessory.name);
+    for (int i = 0; i < 5; i++) {
+        if (strcmp(tempAccessory.name, home[i].name) == 0)
+            send(socketD, &home[i].status, sizeof(home[i].status), 0);
+    }
+    
     if (close(socketD) == 0)
-        printf("<Thread> Connessione terminata\n\tPorta locale: %d\n\tPorta client: %d\n", PORT, ntohs(clientAddr.sin_port));
+        printf("<Thread> Connessione terminata - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
     pthread_exit(EXIT_SUCCESS);
 }

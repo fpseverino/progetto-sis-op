@@ -1,13 +1,14 @@
 #include "libraries.h"
 
 #define PORT 12345
-#define BUFF_SIZE 4096
+#define BUFF_SIZE 128
 
 void addrInit(struct sockaddr_in *address, int port);
 
 int main() {
     int socketD, result;
     char buff[BUFF_SIZE];
+    int accessoryStatus = -1;
     struct sockaddr_in serverAddr;
     struct sockaddr_in clientAddr;
     int clientLen = sizeof(clientAddr);
@@ -22,17 +23,19 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
-    result = connect(socketD, (struct sockaddr_in *) &serverAddr, sizeof(serverAddr));
+    result = connect(socketD, (struct sockaddr *) &serverAddr, sizeof(serverAddr));
     if (result == -1) {
         perror("Errore connect");
         exit(EXIT_FAILURE);
     }
     getsockname(socketD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen);
-    printf("<CLIENT> Connessione stabilita\n\tPorta server: %d\n\tPorta locale: %d\n", PORT, ntohs(clientAddr.sin_port));
+    printf("<CLIENT> Connessione stabilita - Porta server: %d - Porta locale: %d\n", PORT, ntohs(clientAddr.sin_port));
 
-    send(socketD, "Hello, world!", sizeof("Hello, world!"), 0);
-    recv(socketD, buff, sizeof(buff), 0);
-    printf("<CLIENT> Risposta del server: %s\n", buff);
+    printf("Nome dell'accessorio: ");
+    scanf("%s", buff);
+    send(socketD, buff, sizeof(buff), 0);
+    recv(socketD, &accessoryStatus, sizeof(accessoryStatus), 0);
+    printf("<CLIENT> Risposta del server: %d\n", (int) accessoryStatus);
 
     close(socketD);
     puts("\n# Fine del programma\n");
