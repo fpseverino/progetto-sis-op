@@ -1,7 +1,15 @@
+//
+//  hub.c
+//  progettoSisOp
+//
+//  Created by Francesco Paolo Severino and Roberto Giovanni Scolari on 13/12/22.
+//
+
 #include "libraries.h"
 
 #define PORT 12345
 #define MAX_CONN 4
+#define BUFF_SIZE 128
 
 struct sockaddr_in clientAddr;
 
@@ -81,12 +89,12 @@ void addrInit(struct sockaddr_in *address, long IPaddr, int port) {
 
 void * threadHandler(void * clientSocket) {
     int socketD = * (int *) clientSocket;
-    Accessory tempAccessory;
+    char buff[BUFF_SIZE];
     printf("<Thread> Gestisco connessione - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
-    recv(socketD, tempAccessory.name, sizeof(tempAccessory.name), 0);
-    printf("<Thread> Dati ricevuti: %s\n", tempAccessory.name);
+    recv(socketD, buff, sizeof(buff), 0);
+    printf("<Thread> Dati ricevuti: %s\n", buff);
     for (int i = 0; i < 5; i++) {
-        if (strcmp(tempAccessory.name, home[i].name) == 0)
+        if (strcmp(buff, home[i].name) == 0)
             send(socketD, &home[i].status, sizeof(home[i].status), 0);
     }
     

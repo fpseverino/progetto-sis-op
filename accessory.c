@@ -1,5 +1,5 @@
 //
-//  device.c
+//  accessory.c
 //  progettoSisOp
 //
 //  Created by Francesco Paolo Severino and Roberto Giovanni Scolari on 13/12/22.
@@ -8,19 +8,28 @@
 #include "libraries.h"
 
 #define PORT 12345
-#define BUFF_SIZE 128
+
+Accessory myInfo;
 
 void addrInit(struct sockaddr_in *address, int port);
 
-int main() {
+int main(int argc, const char * argv[]) {
     int socketD, result;
-    char buff[BUFF_SIZE];
-    int accessoryStatus = -1;
     struct sockaddr_in serverAddr;
     struct sockaddr_in clientAddr;
     int clientLen = sizeof(clientAddr);
 
     puts("\n# Inizio del programma\n");
+
+    if (argc > 1) {
+        strcpy(myInfo.name, argv[1]);
+        myInfo.status = -1;
+        printf("Hi! I'm %s\n", myInfo.name);
+    } else {
+        puts("Usage: ./accessory AccessoryName\n");
+        exit(EXIT_FAILURE);
+    }
+
     puts("<CLIENT> in esecuzione...");
     addrInit(&serverAddr, PORT);
 
@@ -38,11 +47,9 @@ int main() {
     getsockname(socketD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen);
     printf("<CLIENT> Connessione stabilita - Porta server: %d - Porta locale: %d\n", PORT, ntohs(clientAddr.sin_port));
 
-    printf("Nome dell'accessorio: ");
-    scanf("%s", buff);
-    send(socketD, buff, sizeof(buff), 0);
-    recv(socketD, &accessoryStatus, sizeof(accessoryStatus), 0);
-    printf("<CLIENT> Risposta del server: %d\n", (int) accessoryStatus);
+    send(socketD, myInfo.name, sizeof(myInfo.name), 0);
+    recv(socketD, &myInfo.status, sizeof(myInfo.status), 0);
+    printf("<CLIENT> Risposta del server: %d\n", (int) myInfo.status);
 
     close(socketD);
     puts("\n# Fine del programma\n");
