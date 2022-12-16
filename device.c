@@ -11,6 +11,7 @@
 #define BUFF_SIZE 128
 
 void addrInit(struct sockaddr_in *address, int port);
+unsigned int mainMenu();
 
 int main() {
     int socketD, result;
@@ -38,11 +39,11 @@ int main() {
     getsockname(socketD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen);
     printf("<CLIENT> Connessione stabilita - Porta server: %d - Porta locale: %d\n", PORT, ntohs(clientAddr.sin_port));
 
-    printf("Nome dell'accessorio: ");
-    scanf("%s", buff);
-    send(socketD, buff, sizeof(buff), 0);
-    recv(socketD, &accessoryStatus, sizeof(accessoryStatus), 0);
-    printf("<CLIENT> Risposta del server: %d\n", (int) accessoryStatus);
+            printf("Nome dell'accessorio: ");
+            scanf("%s", buff);
+            send(socketD, buff, sizeof(buff), 0);
+            recv(socketD, &accessoryStatus, sizeof(accessoryStatus), 0);
+            printf("<CLIENT> Risposta del server: %d\n", (int) accessoryStatus);
 
     close(socketD);
     puts("\n# Fine del programma\n");
@@ -53,4 +54,16 @@ void addrInit(struct sockaddr_in *address, int port) {
     address->sin_family = AF_INET;
     address->sin_port = htons(port);
     inet_aton("127.0.0.1", &address->sin_addr);
+}
+
+unsigned int mainMenu() {
+    printf("%s", "*** Main menu ***\n"
+        " 1 - Add accessory\n"
+        " 2 - Check accessory\n"
+        " 3 - Update accessory\n"
+        " 4 - Exit\n? ");
+    unsigned int menu;
+    fflush(stdin);
+    scanf("%u", &menu);
+    return menu;
 }

@@ -13,4 +13,4 @@ accessory: accessory.c
 
 .PHONY: clean
 clean:
-	rm -f hub device
+	rm -f hub device accessory

@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <string.h>
+#include <ctype.h>
 #include <pthread.h>
 #include <sys/types.h>
 #include <sys/socket.h>
