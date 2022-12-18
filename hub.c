@@ -8,7 +8,7 @@
 #include "libraries.h"
 
 #define PORT 12345
-#define MAX_CONN 4
+#define MAX_CONN 8
 #define BUFF_SIZE 128
 
 struct sockaddr_in clientAddr;
@@ -93,7 +93,7 @@ void * threadHandler(void * clientSocket) {
     printf("<Thread> Gestisco connessione - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
     recv(socketD, buff, sizeof(buff), 0);
     printf("<Thread> Dati ricevuti: %s\n", buff);
-    for (int i = 0; i < 5; i++) {
+            for (int i = 0; i < 5; i++) {
         if (strcmp(buff, home[i].name) == 0)
             send(socketD, &home[i].status, sizeof(home[i].status), 0);
     }
