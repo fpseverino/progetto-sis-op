@@ -14,7 +14,7 @@ Accessory myInfo;
 void addrInit(struct sockaddr_in *address, int port);
 
 int main(int argc, const char * argv[]) {
-    int socketD, result;
+    int socketFD;
     struct sockaddr_in serverAddr;
     struct sockaddr_in clientAddr;
     int clientLen = sizeof(clientAddr);
@@ -33,25 +33,23 @@ int main(int argc, const char * argv[]) {
     puts("<CLIENT> in esecuzione...");
     addrInit(&serverAddr, PORT);
 
-    socketD = socket(PF_INET, SOCK_STREAM, 0);
-    if (socketD == -1) {
-        perror("Errore creazione socket");
+    if ((socketFD = socket(PF_INET, SOCK_STREAM, 0)) == -1) {
+        perror("socket");
         exit(EXIT_FAILURE);
     }
 
-    result = connect(socketD, (struct sockaddr *) &serverAddr, sizeof(serverAddr));
-    if (result == -1) {
-        perror("Errore connect");
+    if (connect(socketFD, (struct sockaddr *) &serverAddr, sizeof(serverAddr)) == -1) {
+        perror("connect");
         exit(EXIT_FAILURE);
     }
-    getsockname(socketD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen);
+    getsockname(socketFD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen);
     printf("<CLIENT> Connessione stabilita - Porta server: %d - Porta locale: %d\n", PORT, ntohs(clientAddr.sin_port));
 
-    send(socketD, myInfo.name, sizeof(myInfo.name), 0);
-    recv(socketD, &myInfo.status, sizeof(myInfo.status), 0);
+    send(socketFD, myInfo.name, sizeof(myInfo.name), 0);
+    recv(socketFD, &myInfo.status, sizeof(myInfo.status), 0);
     printf("<CLIENT> Risposta del server: %d\n", (int) myInfo.status);
 
-    close(socketD);
+    close(socketFD);
     puts("\n# Fine del programma\n");
     exit(EXIT_SUCCESS);
 }

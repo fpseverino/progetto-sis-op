@@ -19,7 +19,7 @@ void * threadHandler(void * clientSocket);
 Accessory home[5];
 
 int main() {
-    int socketD, newSocketD;
+    int socketFD, newSocketFD;
     int result;
     struct sockaddr_in serverAddr;
     int clientLen = sizeof(clientAddr);
@@ -40,43 +40,39 @@ int main() {
     puts("<SERVER> in esecuzione...");
     addrInit(&serverAddr, INADDR_ANY, PORT);
 
-    socketD = socket(PF_INET, SOCK_STREAM, 0);
-    if (socketD == -1) {
-        perror("Errore creazione socket");
+    if ((socketFD = socket(PF_INET, SOCK_STREAM, 0)) == -1) {
+        perror("socket");
         exit(EXIT_FAILURE);
     }
 
-    result = bind(socketD, (struct sockaddr *) &serverAddr, sizeof(serverAddr));
-    if (result == -1) {
-        perror("Errore bind");
+    if (bind(socketFD, (struct sockaddr *) &serverAddr, sizeof(serverAddr)) == -1) {
+        perror("bind");
         exit(EXIT_FAILURE);
     }
 
-    if (listen(socketD, MAX_CONN) < 0) {
-        perror("Errore listen");
+    if (listen(socketFD, MAX_CONN) < 0) {
+        perror("listen");
         exit(EXIT_FAILURE);
     }
 
     printf("<SERVER> in attesa di connessione sulla porta: %d\n", ntohs(serverAddr.sin_port));
 
     while (true) {
-        newSocketD = accept(socketD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen);
-        if (newSocketD == -1) {
-            perror("Errore accept");
+        if ((newSocketFD = accept(socketFD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen)) == -1) {
+            perror("accept");
             exit(EXIT_FAILURE);
         }
         printf("<SERVER> Connessione accettata - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
 
-        result = pthread_create(&tid, NULL, threadHandler, (void *) &newSocketD);
-        if (result != 0) {
-            perror("Errore pthread_create");
+        if (pthread_create(&tid, NULL, threadHandler, (void *) &newSocketFD) != 0) {
+            perror("pthread_create");
             exit(EXIT_FAILURE);
         }
         puts("<SERVER> Thread generato");
     }
 
-    close(socketD);
-    close(newSocketD);
+    close(socketFD);
+    close(newSocketFD);
     puts("\n# Fine del programma\n");
     exit(EXIT_SUCCESS);
 }
@@ -88,17 +84,17 @@ void addrInit(struct sockaddr_in *address, long IPaddr, int port) {
 }
 
 void * threadHandler(void * clientSocket) {
-    int socketD = * (int *) clientSocket;
+    int newSocketFD = * (int *) clientSocket;
     char buff[BUFF_SIZE];
     printf("<Thread> Gestisco connessione - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
-    recv(socketD, buff, sizeof(buff), 0);
+    recv(newSocketFD, buff, sizeof(buff), 0);
     printf("<Thread> Dati ricevuti: %s\n", buff);
             for (int i = 0; i < 5; i++) {
         if (strcmp(buff, home[i].name) == 0)
-            send(socketD, &home[i].status, sizeof(home[i].status), 0);
+            send(newSocketFD, &home[i].status, sizeof(home[i].status), 0);
     }
     
-    if (close(socketD) == 0)
+    if (close(newSocketFD) == 0)
         printf("<Thread> Connessione terminata - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
     pthread_exit(EXIT_SUCCESS);
 }
