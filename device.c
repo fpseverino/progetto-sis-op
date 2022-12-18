@@ -37,10 +37,11 @@ int main() {
     getsockname(socketFD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen);
     printf("<CLIENT> Connessione stabilita - Porta server: %d - Porta locale: %d\n", PORT, ntohs(clientAddr.sin_port));
 
+    printf("Richiesta: ");
+    scanf("%d", &packet.request);
     printf("Nome dell'accessorio: ");
     scanf("%s", buff);
     strcpy(packet.accessory.name, buff);
-    packet.request = 1;
     send(socketFD, &packet, sizeof(Packet), 0);
     recv(socketFD, &accessoryStatus, sizeof(accessoryStatus), 0);
     printf("<CLIENT> Risposta del server: %d\n", (int) accessoryStatus);

@@ -25,7 +25,7 @@ typedef struct {
 } Accessory;
 
 typedef struct {
-    int request; // 1 = read, 2 = add
+    int request; // 1 = read one, 2 = add, 3 = read all
     Accessory accessory;
 } Packet;
 

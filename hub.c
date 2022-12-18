@@ -93,6 +93,11 @@ void * threadHandler(void * clientSocket) {
         home[homeIndex].status = 0;
         homeIndex++;
         break;
+    case 3:
+        for (int i = 0; i < MAX_ACCESSORIES; i++) {
+            printf("%s: %d\n", home[i].name, home[i].status);
+        }
+        break;
     default:
         break;
     }
