@@ -9,32 +9,24 @@
 
 #define PORT 12345
 #define MAX_CONN 8
-#define BUFF_SIZE 128
+#define MAX_ACCESSORIES 8
 
 struct sockaddr_in clientAddr;
 
 void addrInit(struct sockaddr_in *address, long IPaddr, int port);
 void * threadHandler(void * clientSocket);
+void homeInit();
 
-Accessory home[5];
+Accessory home[MAX_ACCESSORIES];
+int homeIndex = 0;
 
 int main() {
     int socketFD, newSocketFD;
-    int result;
     struct sockaddr_in serverAddr;
     int clientLen = sizeof(clientAddr);
     pthread_t tid;
 
-    strcpy(home[0].name, "Luce1");
-    home[0].status = 0;
-    strcpy(home[1].name, "Luce2");
-    home[1].status = 1;
-    strcpy(home[2].name, "Termostato");
-    home[2].status = 21;
-    strcpy(home[3].name, "Luce3");
-    home[3].status = 1;
-    strcpy(home[4].name, "Luce4");
-    home[4].status = 0;
+    //homeInit();
 
     puts("\n# Inizio del programma\n");
     puts("<SERVER> in esecuzione...");
@@ -85,16 +77,40 @@ void addrInit(struct sockaddr_in *address, long IPaddr, int port) {
 
 void * threadHandler(void * clientSocket) {
     int newSocketFD = * (int *) clientSocket;
-    char buff[BUFF_SIZE];
-    printf("<Thread> Gestisco connessione - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
-    recv(newSocketFD, buff, sizeof(buff), 0);
-    printf("<Thread> Dati ricevuti: %s\n", buff);
-    for (int i = 0; i < 5; i++) {
-        if (strcmp(buff, home[i].name) == 0)
-            send(newSocketFD, &home[i].status, sizeof(home[i].status), 0);
+    Packet packet;
+    printf("\t<Thread> Gestisco connessione - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
+    recv(newSocketFD, &packet, sizeof(Packet), 0);
+    printf("\t<Thread> Richiesta ricevuta: %d - Nome accessorio: %s\n", packet.request, packet.accessory.name);
+    switch (packet.request) {
+    case 1:
+        for (int i = 0; i < 5; i++) {
+            if (strcmp(packet.accessory.name, home[i].name) == 0)
+                send(newSocketFD, &home[i].status, sizeof(home[i].status), 0);
+        }
+        break;
+    case 2:
+        strcpy(home[homeIndex].name, packet.accessory.name);
+        home[homeIndex].status = 0;
+        homeIndex++;
+        break;
+    default:
+        break;
     }
     
     if (close(newSocketFD) == 0)
-        printf("<Thread> Connessione terminata - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
+        printf("\t<Thread> Connessione terminata - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
     pthread_exit(EXIT_SUCCESS);
+}
+
+void homeInit() {
+    strcpy(home[0].name, "Luce1");
+    home[0].status = 0;
+    strcpy(home[1].name, "Luce2");
+    home[1].status = 1;
+    strcpy(home[2].name, "Termostato");
+    home[2].status = 21;
+    strcpy(home[3].name, "Luce3");
+    home[3].status = 1;
+    strcpy(home[4].name, "Luce4");
+    home[4].status = 0;
 }

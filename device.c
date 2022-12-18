@@ -16,6 +16,7 @@ int main() {
     int socketFD;
     char buff[BUFF_SIZE];
     int accessoryStatus = -1;
+    Packet packet;
     struct sockaddr_in serverAddr;
     struct sockaddr_in clientAddr;
     int clientLen = sizeof(clientAddr);
@@ -38,7 +39,9 @@ int main() {
 
     printf("Nome dell'accessorio: ");
     scanf("%s", buff);
-    send(socketFD, buff, sizeof(buff), 0);
+    strcpy(packet.accessory.name, buff);
+    packet.request = 1;
+    send(socketFD, &packet, sizeof(Packet), 0);
     recv(socketFD, &accessoryStatus, sizeof(accessoryStatus), 0);
     printf("<CLIENT> Risposta del server: %d\n", (int) accessoryStatus);
 

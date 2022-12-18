@@ -24,4 +24,9 @@ typedef struct {
     int status;
 } Accessory;
 
+typedef struct {
+    int request; // 1 = read, 2 = add
+    Accessory accessory;
+} Packet;
+
 #endif
