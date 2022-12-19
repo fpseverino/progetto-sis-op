@@ -4,7 +4,6 @@
 //
 //  Created by Francesco Paolo Severino and Roberto Giovanni Scolari on 13/12/22.
 //
-//cosa a caso
 
 #include "libraries.h"
 
