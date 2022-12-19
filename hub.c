@@ -83,22 +83,30 @@ void * threadHandler(void * clientSocket) {
     printf("\t<Thread> Richiesta ricevuta: %d - Nome accessorio: %s\n", packet.request, packet.accessory.name);
     switch (packet.request) {
     case 1:
+        // Add accessory
+        if (homeIndex == MAX_ACCESSORIES) {
+            puts("\t<Thread> Numero massimo dispositivi raggiunto");
+            break;
+        }
+        strcpy(home[homeIndex].name, packet.accessory.name);
+        home[homeIndex].status = 0;
+        homeIndex++;
+        break;
+    case 2:
+        // Check one accessory
         for (int i = 0; i < 5; i++) {
             if (strcmp(packet.accessory.name, home[i].name) == 0)
                 send(newSocketFD, &home[i].status, sizeof(home[i].status), 0);
         }
         break;
-    case 2:
-        strcpy(home[homeIndex].name, packet.accessory.name);
-        home[homeIndex].status = 0;
-        homeIndex++;
-        break;
     case 3:
+        // Check all accessories
         for (int i = 0; i < MAX_ACCESSORIES; i++) {
             printf("%s: %d\n", home[i].name, home[i].status);
         }
         break;
     default:
+        printf("\t<Thread> Richiesta -%d- non valida\n", packet.request);
         break;
     }
     

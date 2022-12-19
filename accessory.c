@@ -23,7 +23,7 @@ int main(int argc, const char * argv[]) {
 
     if (argc > 1) {
         strcpy(myInfo.accessory.name, argv[1]);
-        myInfo.request = 2;
+        myInfo.request = 1;
         printf("Hi! I'm %s\n", myInfo.accessory.name);
     } else {
         puts("Usage: ./accessory accessoryName\n");
