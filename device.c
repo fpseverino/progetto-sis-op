@@ -39,12 +39,35 @@ int main() {
 
     printf("Richiesta: ");
     scanf("%d", &packet.request);
-    printf("Nome dell'accessorio: ");
-    scanf("%s", buff);
-    strcpy(packet.accessory.name, buff);
-    send(socketFD, &packet, sizeof(Packet), 0);
-    recv(socketFD, &accessoryStatus, sizeof(accessoryStatus), 0);
-    printf("<CLIENT> Risposta del server: %d\n", (int) accessoryStatus);
+    switch (packet.request) {
+    case 2:
+        // Read status of one accessory
+        printf("Nome dell'accessorio: ");
+        scanf("%s", buff);
+        strcpy(packet.accessory.name, buff);
+        send(socketFD, &packet, sizeof(Packet), 0);
+        recv(socketFD, &accessoryStatus, sizeof(accessoryStatus), 0);
+        printf("<CLIENT> Risposta del server: %d\n", (int) accessoryStatus);
+        break;
+    case 3:
+        // Read status of all accessories
+        send(socketFD, &packet, sizeof(Packet), 0);
+        puts("<CLIENT> Lista degli accessori stampata sull'hub");
+        break;
+    case 4:
+        // Update status of one accessory
+        printf("Nome dell'accessorio: ");
+        scanf("%s", buff);
+        strcpy(packet.accessory.name, buff);
+        printf("Stato dell'accessorio: ");
+        scanf("%d", &packet.accessory.status);
+        send(socketFD, &packet, sizeof(Packet), 0);
+        puts("<CLIENT> Update inviato all'hub");
+        break;
+    default:
+        puts("<CLIENT> Richiesta non definita");
+        break;
+    }
 
     close(socketFD);
     puts("\n# Fine del programma\n");

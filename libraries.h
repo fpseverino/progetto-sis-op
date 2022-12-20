@@ -25,8 +25,20 @@ typedef struct {
 } Accessory;
 
 typedef struct {
-    int request; // 1 = add, 2 = read one, 3 = read all
+    int request;
     Accessory accessory;
 } Packet;
+
+/*
+    request
+    1 = Add accessory
+    2 = Read status of one accessory
+    3 = Read status of all accessories
+    4 = Update status of one accessory
+    5 = 
+    6 = 
+    7 = 
+    8 = 
+*/
 
 #endif
