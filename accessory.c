@@ -9,7 +9,8 @@
 
 #define PORT 12345
 
-Packet myInfo;
+Accessory myInfo;
+Packet packet;
 
 void addrInit(struct sockaddr_in *address, int port);
 
@@ -22,9 +23,10 @@ int main(int argc, const char * argv[]) {
     puts("\n# Inizio del programma\n");
 
     if (argc > 1) {
-        strcpy(myInfo.accessory.name, argv[1]);
-        myInfo.request = 1;
-        printf("Hi! I'm %s\n", myInfo.accessory.name);
+        strcpy(myInfo.name, argv[1]);
+        strcpy(packet.accessory.name, argv[1]);
+        packet.request = 1;
+        printf("Hi! I'm %s\n", myInfo.name);
     } else {
         puts("Usage: ./accessory accessoryName\n");
         exit(EXIT_FAILURE);
@@ -45,10 +47,14 @@ int main(int argc, const char * argv[]) {
     getsockname(socketFD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen);
     printf("<CLIENT> Connessione stabilita - Porta server: %d - Porta locale: %d\n", PORT, ntohs(clientAddr.sin_port));
 
-    send(socketFD, &myInfo, sizeof(myInfo), 0);
+    send(socketFD, &packet, sizeof(packet), 0);
     puts("<CLIENT> Dati inviati al server");
-    //recv(socketFD, &myInfo.status, sizeof(myInfo.status), 0);
-    //printf("<CLIENT> Risposta del server: %d\n", (int) myInfo.status);
+    
+    while (true) {
+        puts("<CLIENT> In ascolto per aggiornamenti dal server");
+        recv(socketFD, &myInfo, sizeof(myInfo), 0);
+        printf("<CLIENT> Dati ricevuti: %d\n", myInfo.status);
+    }
 
     close(socketFD);
     puts("\n# Fine del programma\n");

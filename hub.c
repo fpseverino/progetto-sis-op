@@ -9,7 +9,7 @@
 
 #define PORT 12345
 #define MAX_CONN 8
-#define MAX_ACCESSORIES 8
+#define MAX_ACCESSORIES 5
 
 struct sockaddr_in clientAddr;
 
@@ -19,6 +19,9 @@ void homeInit();
 
 Accessory home[MAX_ACCESSORIES];
 int homeIndex = 0;
+
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 
 int main() {
     int socketFD, newSocketFD;
@@ -63,6 +66,8 @@ int main() {
         puts("<SERVER> Thread generato");
     }
 
+    pthread_mutex_destroy(&mutex);
+    pthread_cond_destroy(&cond);
     close(socketFD);
     close(newSocketFD);
     puts("\n# Fine del programma\n");
@@ -80,33 +85,60 @@ void * threadHandler(void * clientSocket) {
     Packet packet;
     printf("\t<Thread> Gestisco connessione - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
     recv(newSocketFD, &packet, sizeof(Packet), 0);
-    printf("\t<Thread> Richiesta ricevuta: %d - Nome accessorio: %s\n", packet.request, packet.accessory.name);
+    printf("\t<Thread> Richiesta ricevuta: %d\n", packet.request);
     switch (packet.request) {
     case 1:
         // Add accessory
+        pthread_mutex_lock(&mutex);
+        puts("\t<ADD Thread> Mutex bloccato");
         if (homeIndex == MAX_ACCESSORIES) {
-            puts("\t<Thread> Numero massimo dispositivi raggiunto");
+            puts("\t<ADD Thread> Numero massimo dispositivi raggiunto");
             break;
         }
-        strcpy(home[homeIndex].name, packet.accessory.name);
-        home[homeIndex].status = 0;
-        homeIndex++;
+        int myIndex = homeIndex++;
+        strcpy(home[myIndex].name, packet.accessory.name);
+        home[myIndex].status = 0;
+        printf("\t<ADD Thread> Aggiunto %s\n", home[myIndex].name);
+        while (true) {
+            // IL PROBLEMA è QUA!
+            // QUALSIASI THREAD FACCIA SIGNAL PORTA NEL PRIMO THREAD
+            pthread_cond_wait(&cond, &mutex);
+            send(newSocketFD, &home[myIndex], sizeof(home[myIndex]), 0);
+            puts("\t<ADD Thread> Inviato aggiornamento all'accessorio");
+        }
+        pthread_mutex_unlock(&mutex);
+        puts("\t<ADD Thread> Mutex sbloccato");
         break;
     case 2:
-        // Check one accessory
-        for (int i = 0; i < 5; i++) {
+        // Read status of one accessory
+        for (int i = 0; i < MAX_ACCESSORIES; i++) {
             if (strcmp(packet.accessory.name, home[i].name) == 0)
                 send(newSocketFD, &home[i].status, sizeof(home[i].status), 0);
         }
         break;
     case 3:
-        // Check all accessories
+        // Read status of all accessories
         for (int i = 0; i < MAX_ACCESSORIES; i++) {
             printf("%s: %d\n", home[i].name, home[i].status);
         }
         break;
+    case 4:
+        // Update status of one accessory
+        pthread_mutex_lock(&mutex);
+        puts("\t<UPDATE Thread> Mutex bloccato");
+        for (int i = 0; i < MAX_ACCESSORIES; i++) {
+            if (strcmp(packet.accessory.name, home[i].name) == 0) {
+                home[i].status = packet.accessory.status;
+                pthread_cond_signal(&cond);
+                puts("\t<UPDATE Thread> Variabile condizione segnalata");
+                printf("\t<UPDATE Thread> %s impostato a %d\n", home[i].name, home[i].status);
+            }
+        }
+        pthread_mutex_unlock(&mutex);
+        puts("\t<UPDATE Thread> Mutex sbloccato");
+        break;
     default:
-        printf("\t<Thread> Richiesta -%d- non valida\n", packet.request);
+        puts("\t<Thread> Richiesta non valida");
         break;
     }
     
