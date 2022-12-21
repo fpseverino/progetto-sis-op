@@ -99,12 +99,16 @@ void * threadHandler(void * clientSocket) {
         strcpy(home[myIndex].name, packet.accessory.name);
         home[myIndex].status = 0;
         printf("\t<ADD Thread> Aggiunto %s\n", home[myIndex].name);
+        Accessory tempInfo;
+        strcpy(tempInfo.name, home[myIndex].name);
+        tempInfo.status = home[myIndex].status;
         while (true) {
-            // IL PROBLEMA è QUA!
-            // QUALSIASI THREAD FACCIA SIGNAL PORTA NEL PRIMO THREAD
             pthread_cond_wait(&cond, &mutex);
-            send(newSocketFD, &home[myIndex], sizeof(home[myIndex]), 0);
-            puts("\t<ADD Thread> Inviato aggiornamento all'accessorio");
+            if (tempInfo.status != home[myIndex].status) {
+                send(newSocketFD, &home[myIndex], sizeof(home[myIndex]), 0);
+                tempInfo.status = home[myIndex].status;
+                puts("\t<ADD Thread> Inviato aggiornamento all'accessorio");
+            }
         }
         pthread_mutex_unlock(&mutex);
         puts("\t<ADD Thread> Mutex sbloccato");
@@ -133,7 +137,7 @@ void * threadHandler(void * clientSocket) {
         for (int i = 0; i < MAX_ACCESSORIES; i++) {
             if (strcmp(packet.accessory.name, home[i].name) == 0) {
                 home[i].status = packet.accessory.status;
-                pthread_cond_signal(&cond);
+                pthread_cond_broadcast(&cond);
                 puts("\t<UPDATE Thread> Variabile condizione segnalata");
                 printf("\t<UPDATE Thread> %s impostato a %d\n", home[i].name, home[i].status);
             }
