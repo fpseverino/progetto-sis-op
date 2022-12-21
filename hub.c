@@ -111,16 +111,20 @@ void * threadHandler(void * clientSocket) {
         break;
     case 2:
         // Read status of one accessory
+        pthread_mutex_lock(&mutex);
         for (int i = 0; i < MAX_ACCESSORIES; i++) {
             if (strcmp(packet.accessory.name, home[i].name) == 0)
                 send(newSocketFD, &home[i].status, sizeof(home[i].status), 0);
         }
+        pthread_mutex_unlock(&mutex);
         break;
     case 3:
         // Read status of all accessories
+        pthread_mutex_lock(&mutex);
         for (int i = 0; i < MAX_ACCESSORIES; i++) {
             printf("%s: %d\n", home[i].name, home[i].status);
         }
+        pthread_mutex_unlock(&mutex);
         break;
     case 4:
         // Update status of one accessory
