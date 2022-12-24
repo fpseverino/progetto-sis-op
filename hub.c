@@ -15,7 +15,6 @@ struct sockaddr_in clientAddr;
 
 void addrInit(struct sockaddr_in *address, long IPaddr, int port);
 void * threadHandler(void * clientSocket);
-void homeInit();
 
 Accessory home[MAX_ACCESSORIES];
 int homeIndex = 0;
@@ -29,27 +28,21 @@ int main() {
     int clientLen = sizeof(clientAddr);
     pthread_t tid;
 
-    //homeInit();
+    puts("\n# Inizio del programma (server)\n");
 
-    puts("\n# Inizio del programma\n");
-    puts("<SERVER> in esecuzione...");
     addrInit(&serverAddr, INADDR_ANY, PORT);
-
     if ((socketFD = socket(PF_INET, SOCK_STREAM, 0)) == -1) {
         perror("socket");
         exit(EXIT_FAILURE);
     }
-
     if (bind(socketFD, (struct sockaddr *) &serverAddr, sizeof(serverAddr)) == -1) {
         perror("bind");
         exit(EXIT_FAILURE);
     }
-
     if (listen(socketFD, MAX_CONN) < 0) {
         perror("listen");
         exit(EXIT_FAILURE);
     }
-
     printf("<SERVER> in attesa di connessione sulla porta: %d\n", ntohs(serverAddr.sin_port));
 
     while (true) {
@@ -70,7 +63,7 @@ int main() {
     pthread_cond_destroy(&cond);
     close(socketFD);
     close(newSocketFD);
-    puts("\n# Fine del programma\n");
+    puts("\n# Fine del programma (server)\n");
     exit(EXIT_SUCCESS);
 }
 
@@ -90,7 +83,6 @@ void * threadHandler(void * clientSocket) {
     case 1:
         // Add accessory
         pthread_mutex_lock(&mutex);
-        puts("\t<ADD Thread> Mutex bloccato");
         if (homeIndex == MAX_ACCESSORIES) {
             puts("\t<ADD Thread> Numero massimo dispositivi raggiunto");
             break;
@@ -111,7 +103,6 @@ void * threadHandler(void * clientSocket) {
             }
         }
         pthread_mutex_unlock(&mutex);
-        puts("\t<ADD Thread> Mutex sbloccato");
         break;
     case 2:
         // Read status of one accessory
@@ -126,24 +117,22 @@ void * threadHandler(void * clientSocket) {
         // Read status of all accessories
         pthread_mutex_lock(&mutex);
         for (int i = 0; i < MAX_ACCESSORIES; i++) {
-            printf("%s: %d\n", home[i].name, home[i].status);
+            send(newSocketFD, &home[i].name, sizeof(home[i].name), 0);
+            send(newSocketFD, &home[i].status, sizeof(home[i].status), 0);
         }
         pthread_mutex_unlock(&mutex);
         break;
     case 4:
         // Update status of one accessory
         pthread_mutex_lock(&mutex);
-        puts("\t<UPDATE Thread> Mutex bloccato");
         for (int i = 0; i < MAX_ACCESSORIES; i++) {
             if (strcmp(packet.accessory.name, home[i].name) == 0) {
                 home[i].status = packet.accessory.status;
                 pthread_cond_broadcast(&cond);
-                puts("\t<UPDATE Thread> Variabile condizione segnalata");
                 printf("\t<UPDATE Thread> %s impostato a %d\n", home[i].name, home[i].status);
             }
         }
         pthread_mutex_unlock(&mutex);
-        puts("\t<UPDATE Thread> Mutex sbloccato");
         break;
     default:
         puts("\t<Thread> Richiesta non valida");
@@ -153,17 +142,4 @@ void * threadHandler(void * clientSocket) {
     if (close(newSocketFD) == 0)
         printf("\t<Thread> Connessione terminata - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
     pthread_exit(EXIT_SUCCESS);
-}
-
-void homeInit() {
-    strcpy(home[0].name, "Luce1");
-    home[0].status = 0;
-    strcpy(home[1].name, "Luce2");
-    home[1].status = 1;
-    strcpy(home[2].name, "Termostato");
-    home[2].status = 21;
-    strcpy(home[3].name, "Luce3");
-    home[3].status = 1;
-    strcpy(home[4].name, "Luce4");
-    home[4].status = 0;
 }

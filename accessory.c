@@ -20,44 +20,35 @@ int main(int argc, const char * argv[]) {
     struct sockaddr_in clientAddr;
     int clientLen = sizeof(clientAddr);
 
-    puts("\n# Inizio del programma\n");
-
     if (argc > 1) {
         strcpy(myInfo.name, argv[1]);
         strcpy(packet.accessory.name, argv[1]);
         packet.request = 1;
-        printf("Hi! I'm %s\n", myInfo.name);
     } else {
-        puts("Usage: ./accessory accessoryName\n");
+        puts("<ACCESSORY> Usage: ./accessory accessoryName\n");
         exit(EXIT_FAILURE);
     }
 
-    puts("<CLIENT> in esecuzione...");
     addrInit(&serverAddr, PORT);
-
     if ((socketFD = socket(PF_INET, SOCK_STREAM, 0)) == -1) {
         perror("socket");
         exit(EXIT_FAILURE);
     }
-
     if (connect(socketFD, (struct sockaddr *) &serverAddr, sizeof(serverAddr)) == -1) {
         perror("connect");
         exit(EXIT_FAILURE);
     }
     getsockname(socketFD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen);
-    printf("<CLIENT> Connessione stabilita - Porta server: %d - Porta locale: %d\n", PORT, ntohs(clientAddr.sin_port));
+    printf("<%s> Connessione stabilita - Porta server: %d - Porta locale: %d\n", myInfo.name, PORT, ntohs(clientAddr.sin_port));
 
     send(socketFD, &packet, sizeof(packet), 0);
-    puts("<CLIENT> Dati inviati al server");
     
     while (true) {
-        puts("<CLIENT> In ascolto per aggiornamenti dal server");
         recv(socketFD, &myInfo, sizeof(myInfo), 0);
-        printf("<CLIENT> Dati ricevuti: %d\n", myInfo.status);
+        printf("<%s> Nuovo status: %d\n", myInfo.name, myInfo.status);
     }
 
     close(socketFD);
-    puts("\n# Fine del programma\n");
     exit(EXIT_SUCCESS);
 }
 
