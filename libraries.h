@@ -19,6 +19,12 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#define PORT 21000
+#define MAX_CONN 8
+#define MAX_ACCESSORIES 5
+#define EXIT 5
+#define BUFF_SIZE 128
+
 typedef struct {
     char name[128];
     int status;

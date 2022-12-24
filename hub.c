@@ -7,11 +7,6 @@
 
 #include "libraries.h"
 
-#define PORT 12345
-#define MAX_CONN 8
-#define MAX_ACCESSORIES 5
-#define EXIT 5
-
 struct sockaddr_in clientAddr;
 
 void addrInit(struct sockaddr_in *address, long IPaddr, int port);
@@ -113,11 +108,18 @@ void * threadHandler(void * clientSocket) {
             break;
         case 2:
             // Read status of one accessory
+            bool wasFound = false;
+            int notFound = -1;
             pthread_mutex_lock(&mutex);
             for (int i = 0; i < MAX_ACCESSORIES; i++) {
-                if (strcmp(packet.accessory.name, home[i].name) == 0)
+                if (strcmp(packet.accessory.name, home[i].name) == 0) {
+                    wasFound = true;
                     send(newSocketFD, &home[i].status, sizeof(home[i].status), 0);
+                    break;
+                }
             }
+            if (!wasFound)
+                send(newSocketFD, &notFound, sizeof(int), 0);
             pthread_mutex_unlock(&mutex);
             break;
         case 3:

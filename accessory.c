@@ -7,8 +7,6 @@
 
 #include "libraries.h"
 
-#define PORT 12345
-
 Accessory myInfo;
 Packet packet;
 

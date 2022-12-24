@@ -7,11 +7,6 @@
 
 #include "libraries.h"
 
-#define PORT 12345
-#define BUFF_SIZE 128
-#define MAX_ACCESSORIES 5
-#define EXIT 5
-
 void addrInit(struct sockaddr_in *address, int port);
 int mainMenu();
 
