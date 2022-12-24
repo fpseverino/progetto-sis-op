@@ -35,7 +35,7 @@ typedef struct {
     2 = Read status of one accessory
     3 = Read status of all accessories
     4 = Update status of one accessory
-    5 = 
+    5 = Exit
     6 = 
     7 = 
     8 = 

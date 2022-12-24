@@ -9,8 +9,8 @@
 
 #define PORT 12345
 #define BUFF_SIZE 128
-
 #define MAX_ACCESSORIES 5
+#define EXIT 5
 
 void addrInit(struct sockaddr_in *address, int port);
 int mainMenu();
@@ -40,61 +40,64 @@ int main() {
     getsockname(socketFD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen);
     printf("<CLIENT> Connessione stabilita - Porta server: %d - Porta locale: %d\n", PORT, ntohs(clientAddr.sin_port));
 
-    switch (packet.request = mainMenu()) {
-    case 1:
-        // Add accessory
-        printf("\nNome dell'accessorio: ");
-        fflush(stdin);
-        scanf("%s", buff);
-        switch (pid = fork()) {
-        case -1:
-            perror("fork");
-            exit(EXIT_FAILURE);
+    while ((packet.request = mainMenu()) != EXIT) {
+        switch (packet.request) {
+        case 1:
+            // Add accessory
+            printf("\nNome dell'accessorio: ");
+            fflush(stdin);
+            scanf("%s", buff);
+            switch (pid = fork()) {
+            case -1:
+                perror("fork");
+                exit(EXIT_FAILURE);
+                break;
+            case 0:
+                execl("accessory", "accessory", buff, NULL);
+                exit(EXIT_SUCCESS);
+                break;
+            default:
+                break;
+            }
             break;
-        case 0:
-            execl("accessory", "accessory", buff, NULL);
-            exit(EXIT_SUCCESS);
+        case 2:
+            // Read status of one accessory
+            printf("\nNome dell'accessorio: ");
+            fflush(stdin);
+            scanf("%s", buff);
+            strcpy(packet.accessory.name, buff);
+            send(socketFD, &packet, sizeof(Packet), 0);
+            recv(socketFD, &accessoryStatus, sizeof(accessoryStatus), 0);
+            printf("<CLIENT> Risposta del server: %d\n", (int) accessoryStatus);
+            break;
+        case 3:
+            // Read status of all accessories
+            send(socketFD, &packet, sizeof(Packet), 0);
+            puts("");
+            for (int i = 0; i < MAX_ACCESSORIES; i++) {
+                recv(socketFD, &tempInfo.name, sizeof(tempInfo.name), 0);
+                recv(socketFD, &tempInfo.status, sizeof(tempInfo.status), 0);
+                printf("%s: %d\n", tempInfo.name, tempInfo.status);
+            }
+            break;
+        case 4:
+            // Update status of one accessory
+            printf("\nNome dell'accessorio: ");
+            fflush(stdin);
+            scanf("%s", buff);
+            strcpy(packet.accessory.name, buff);
+            printf("Stato dell'accessorio: ");
+            fflush(stdin);
+            scanf("%d", &packet.accessory.status);
+            send(socketFD, &packet, sizeof(Packet), 0);
+            puts("<CLIENT> Update inviato all'hub");
             break;
         default:
+            puts("\n<CLIENT> Richiesta non definita");
             break;
         }
-        break;
-    case 2:
-        // Read status of one accessory
-        printf("\nNome dell'accessorio: ");
-        fflush(stdin);
-        scanf("%s", buff);
-        strcpy(packet.accessory.name, buff);
-        send(socketFD, &packet, sizeof(Packet), 0);
-        recv(socketFD, &accessoryStatus, sizeof(accessoryStatus), 0);
-        printf("<CLIENT> Risposta del server: %d\n", (int) accessoryStatus);
-        break;
-    case 3:
-        // Read status of all accessories
-        send(socketFD, &packet, sizeof(Packet), 0);
-        puts("");
-        for (int i = 0; i < MAX_ACCESSORIES; i++) {
-            recv(socketFD, &tempInfo.name, sizeof(tempInfo.name), 0);
-            recv(socketFD, &tempInfo.status, sizeof(tempInfo.status), 0);
-            printf("%s: %d\n", tempInfo.name, tempInfo.status);
-        }
-        break;
-    case 4:
-        // Update status of one accessory
-        printf("\nNome dell'accessorio: ");
-        fflush(stdin);
-        scanf("%s", buff);
-        strcpy(packet.accessory.name, buff);
-        printf("Stato dell'accessorio: ");
-        fflush(stdin);
-        scanf("%d", &packet.accessory.status);
-        send(socketFD, &packet, sizeof(Packet), 0);
-        puts("<CLIENT> Update inviato all'hub");
-        break;
-    default:
-        puts("\n<CLIENT> Richiesta non definita");
-        break;
     }
+    send(socketFD, &packet, sizeof(Packet), 0);
 
     close(socketFD);
     puts("\n# Fine del programma (client)\n");
@@ -112,7 +115,8 @@ int mainMenu() {
         " 1 - Aggiungi accessorio\n"
         " 2 - Visualizza accessorio\n"
         " 3 - Visualizza elenco accessori\n"
-        " 4 - Aggiorna accessorio\n? ");
+        " 4 - Aggiorna accessorio\n"
+        " 5 - Uscita\n? ");
     int choice;
     fflush(stdin);
     scanf("%d", &choice);
