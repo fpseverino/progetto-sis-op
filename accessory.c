@@ -17,11 +17,19 @@ int main(int argc, const char * argv[]) {
     struct sockaddr_in serverAddr;
     struct sockaddr_in clientAddr;
     int clientLen = sizeof(clientAddr);
+    int semID;
+    key_t key = ftok(".", 'x');
+
+    semID = semget(key, 0, 0);
+    if (semID < 0) {
+        perror("semget accessory");
+        exit(EXIT_FAILURE);
+    }
 
     if (argc > 1) {
         strcpy(myInfo.name, argv[1]);
         strcpy(packet.accessory.name, argv[1]);
-        packet.request = 1;
+        packet.request = 7;
     } else {
         puts("<ACCESSORY> Usage: ./accessory accessoryName\n");
         exit(EXIT_FAILURE);
@@ -37,13 +45,29 @@ int main(int argc, const char * argv[]) {
         exit(EXIT_FAILURE);
     }
     getsockname(socketFD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen);
-    printf("<%s> Connessione stabilita - Porta server: %d - Porta locale: %d\n", myInfo.name, PORT, ntohs(clientAddr.sin_port));
 
     send(socketFD, &packet, sizeof(packet), 0);
+
+    if (waitSem(semID) != 0)
+        perror("waitSem accessory");
+
+    printf("\t<%s> Connessione stabilita - Porta server: %d - Porta locale: %d\n", myInfo.name, PORT, ntohs(clientAddr.sin_port));
+
+    if (signalSem(semID) != 0)
+        perror("signalSem accessory");
     
     while (true) {
         recv(socketFD, &myInfo, sizeof(myInfo), 0);
-        printf("<%s> Nuovo status: %d\n", myInfo.name, myInfo.status);
+        if (waitSem(semID) != 0)
+            perror("waitSem accessory");
+        if (myInfo.status == DELETED) {
+            printf("\t<%s> Eliminato\n", myInfo.name);
+            exit(EXIT_SUCCESS);
+        } else {
+            printf("\t<%s> Nuovo status: %d\n", myInfo.name, myInfo.status);
+        }
+        if (signalSem(semID) != 0)
+            perror("signalSem accessory");
     }
 
     close(socketFD);

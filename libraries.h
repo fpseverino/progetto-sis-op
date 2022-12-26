@@ -13,17 +13,21 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <string.h>
+#include <signal.h>
 #include <pthread.h>
 #include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/sem.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#define PORT 21000
+#define PORT 27000
 #define MAX_CONN 8
 #define MAX_ACCESSORIES 5
-#define EXIT 5
+#define EXIT_MENU 8
 #define BUFF_SIZE 128
+#define DELETED -127
 
 typedef struct {
     char name[128];
@@ -37,14 +41,20 @@ typedef struct {
 
 /*
     request
-    1 = Add accessory
+    1 = Ask permission to add accessory (Add accessory) (device)
     2 = Read status of one accessory
     3 = Read status of all accessories
     4 = Update status of one accessory
-    5 = Exit
-    6 = 
-    7 = 
-    8 = 
+    5 = Delete one accessory
+    6 = Delete all accessories
+    7 = Add accessory to hub (accessory)
+    8 = Exit
 */
+
+int allocateSem(key_t key, int semFlags);
+int deallocateSem(int semID);
+int initSem(int semID);
+int waitSem(int semID);
+int signalSem(int semID);
 
 #endif
