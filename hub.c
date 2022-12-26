@@ -12,7 +12,7 @@ struct sockaddr_in clientAddr;
 void addrInit(struct sockaddr_in *address, long IPaddr, int port);
 void * threadHandler(void * clientSocket);
 void initHome();
-bool checkName(char * newName);
+bool checkName(char * newName); // Checks if a name is in the home array
 
 Accessory home[MAX_ACCESSORIES];
 int homeIndex = 0;
@@ -93,7 +93,8 @@ void * threadHandler(void * clientSocket) {
     Accessory tempInfo; // case 7: checks if accessory status was updated before broadcast
     bool wasFound = false; // case 2
     int notFound = -1; // case 2
-    int myIndex; // case 7: keeps the array index of the accessory
+    int myIndex; // case 7: keeps the array index of the accessory to update
+    int deleteIndex; // case 5: keeps the array index of the deleted accessory
     bool OKtoConnect = true; // case 1
 
     printf("\t<Thread> Gestisco connessione - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
@@ -157,12 +158,18 @@ void * threadHandler(void * clientSocket) {
             pthread_mutex_lock(&mutex);
             for (int i = 0; i < MAX_ACCESSORIES; i++) {
                 if (strcmp(packet.accessory.name, home[i].name) == 0) {
+                    deleteIndex = i;
                     home[i].status = DELETED;
                     pthread_cond_broadcast(&cond);
                     printf("\t<DELETE Thread> %s eliminato\n", packet.accessory.name);
                     break;
                 }
             }
+            pthread_mutex_unlock(&mutex);
+            sleep(1);
+            pthread_mutex_lock(&mutex);
+            strcpy(home[deleteIndex].name, "");
+            home[deleteIndex].status = -1;
             pthread_mutex_unlock(&mutex);
             break;
         case 6:
@@ -174,9 +181,14 @@ void * threadHandler(void * clientSocket) {
             pthread_cond_broadcast(&cond);
             puts("\t<Thread> Eliminati tutti gli accessori");
             pthread_mutex_unlock(&mutex);
+            sleep(1);
+            pthread_mutex_lock(&mutex);
+            initHome();
+            pthread_mutex_unlock(&mutex);
             break;
         case 7:
             // Add accessory to hub
+            pthread_mutex_lock(&mutex);
             myIndex = homeIndex++;
             strcpy(home[myIndex].name, packet.accessory.name);
             home[myIndex].status = 0;

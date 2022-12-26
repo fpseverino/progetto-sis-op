@@ -40,7 +40,7 @@ typedef struct {
 } Packet;
 
 /*
-    request
+    Packet.request
     1 = Ask permission to add accessory (Add accessory) (device)
     2 = Read status of one accessory
     3 = Read status of all accessories
