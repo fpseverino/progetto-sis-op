@@ -45,8 +45,8 @@ typedef struct {
     2 = Read status of one accessory
     3 = Read status of all accessories
     4 = Update status of one accessory
-    5 = Delete one accessory
-    6 = Delete all accessories
+    5 = Delete all accessories
+    6 = 
     7 = Add accessory to hub (accessory)
     8 = Exit
 */

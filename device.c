@@ -123,18 +123,6 @@ int main() {
                 perror("signalSem device");
             break;
         case 5:
-            // Delete one accessory
-            if (waitSem(semID) != 0)
-                perror("waitSem device");
-            printf("\nNome dell'accessorio: ");
-            fflush(stdin);
-            scanf("%s", buff);
-            strcpy(packet.accessory.name, buff);
-            send(socketFD, &packet, sizeof(Packet), 0);
-            if (signalSem(semID) != 0)
-                perror("signalSem device");
-            break;
-        case 6:
             // Delete all accessories
             send(socketFD, &packet, sizeof(Packet), 0);
             break;
@@ -166,8 +154,7 @@ int mainMenu(int semID) {
         " 2 - Visualizza accessorio\n"
         " 3 - Visualizza elenco accessori\n"
         " 4 - Aggiorna accessorio\n"
-        " 5 - Elimina un accessorio\n"
-        " 6 - Elimina tutti gli accessori\n"
+        " 5 - Elimina tutti gli accessori\n"
         " 8 - Uscita\n? ");
     int choice;
     fflush(stdin);

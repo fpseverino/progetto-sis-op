@@ -62,7 +62,7 @@ int main(int argc, const char * argv[]) {
             perror("waitSem accessory");
         if (myInfo.status == DELETED) {
             printf("\t<%s> Eliminato\n", myInfo.name);
-            exit(EXIT_SUCCESS);
+            break;
         } else {
             printf("\t<%s> Nuovo status: %d\n", myInfo.name, myInfo.status);
         }
