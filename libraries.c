@@ -7,10 +7,6 @@
 
 #include "libraries.h"
 
-int allocateSem(key_t key, int semFlags) {
-    return semget(key, 1, semFlags);
-}
-
 int deallocateSem(int semID) {
     union semun useless;
     return semctl(semID, 0, IPC_RMID, useless);

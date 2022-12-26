@@ -51,7 +51,6 @@ typedef struct {
     8 = Exit
 */
 
-int allocateSem(key_t key, int semFlags);
 int deallocateSem(int semID);
 int initSem(int semID);
 int waitSem(int semID);
