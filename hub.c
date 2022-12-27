@@ -11,11 +11,14 @@ struct sockaddr_in clientAddr;
 
 void addrInit(struct sockaddr_in *address, long IPaddr, int port);
 void * threadHandler(void * clientSocket);
+void interruptionHandler(int sig);
 void initHome();
+int joinHomeThreads();
 bool checkName(char * newName); // Checks if a name is in the home array
 
 Accessory home[MAX_ACCESSORIES];
-int homeIndex = 0;
+int homeIndex;
+pthread_t homeTIDs[MAX_ACCESSORIES];
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
@@ -31,6 +34,11 @@ int main() {
     puts("\n# Inizio del programma (hub)\n");
 
     initHome();
+
+    if (signal(SIGINT, interruptionHandler) != 0) {
+        perror("signal");
+        exit(EXIT_FAILURE);
+    }
 
     addrInit(&serverAddr, INADDR_ANY, PORT);
     if ((socketFD = socket(PF_INET, SOCK_STREAM, 0)) == -1) {
@@ -71,6 +79,15 @@ int main() {
         }
     }
 
+    pthread_mutex_lock(&mutex);
+    for (int i = 0; i < MAX_ACCESSORIES; i++) {
+        home[i].status = DELETED;
+    }
+    pthread_cond_broadcast(&cond);
+    pthread_mutex_unlock(&mutex);
+
+    joinHomeThreads();
+
     if (deallocateSem(semID) >= 0)
         printf("<CLIENT> Deallocato semaforo con ID: %d\n", semID);
     pthread_mutex_destroy(&mutex);
@@ -94,10 +111,9 @@ void * threadHandler(void * clientSocket) {
     bool wasFound = false; // case 2
     int notFound = -1; // case 2
     int myIndex; // case 7: keeps the array index of the accessory to update
-    int deleteIndex; // case 5: keeps the array index of the deleted accessory
     bool OKtoConnect = true; // case 1
 
-    printf("\t<Thread> Gestisco connessione - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
+    printf("<Thread> Gestisco connessione - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
     while (packet.request != EXIT_MENU) {
         recv(newSocketFD, &packet, sizeof(Packet), 0);
         printf("\t<Thread> Richiesta ricevuta: %d\n", packet.request);
@@ -107,11 +123,11 @@ void * threadHandler(void * clientSocket) {
             pthread_mutex_lock(&mutex);
             OKtoConnect = true;
             if (homeIndex >= MAX_ACCESSORIES) {
-                puts("\t<ADD Thread> Numero massimo dispositivi raggiunto");
+                puts("\t\t<Thread> Numero massimo dispositivi raggiunto");
                 OKtoConnect = false;
             }
             if (!checkName(packet.accessory.name)) {
-                puts("\t<ADD Thread> Nome occupato");
+                puts("\t\t<Thread> Nome occupato");
                 OKtoConnect = false;
             }
             send(newSocketFD, &OKtoConnect, sizeof(bool), 0);
@@ -147,41 +163,21 @@ void * threadHandler(void * clientSocket) {
                 if (strcmp(packet.accessory.name, home[i].name) == 0) {
                     home[i].status = packet.accessory.status;
                     pthread_cond_broadcast(&cond);
-                    printf("\t<UPDATE Thread> %s impostato a %d\n", home[i].name, home[i].status);
+                    printf("\t\t<UPDATE Thread> %s impostato a %d\n", home[i].name, home[i].status);
                     break;
                 }
             }
             pthread_mutex_unlock(&mutex);
             break;
         case 5:
-            // Delete one accessory
-            pthread_mutex_lock(&mutex);
-            for (int i = 0; i < MAX_ACCESSORIES; i++) {
-                if (strcmp(packet.accessory.name, home[i].name) == 0) {
-                    deleteIndex = i;
-                    home[i].status = DELETED;
-                    pthread_cond_broadcast(&cond);
-                    printf("\t<DELETE Thread> %s eliminato\n", packet.accessory.name);
-                    break;
-                }
-            }
-            pthread_mutex_unlock(&mutex);
-            sleep(1);
-            pthread_mutex_lock(&mutex);
-            strcpy(home[deleteIndex].name, "");
-            home[deleteIndex].status = -1;
-            pthread_mutex_unlock(&mutex);
-            break;
-        case 6:
             // Delete all accessories
             pthread_mutex_lock(&mutex);
             for (int i = 0; i < MAX_ACCESSORIES; i++) {
                 home[i].status = DELETED;
             }
             pthread_cond_broadcast(&cond);
-            puts("\t<Thread> Eliminati tutti gli accessori");
             pthread_mutex_unlock(&mutex);
-            sleep(1);
+            joinHomeThreads();
             pthread_mutex_lock(&mutex);
             initHome();
             pthread_mutex_unlock(&mutex);
@@ -192,7 +188,8 @@ void * threadHandler(void * clientSocket) {
             myIndex = homeIndex++;
             strcpy(home[myIndex].name, packet.accessory.name);
             home[myIndex].status = 0;
-            printf("\t<ADD Thread> Aggiunto %s\n", home[myIndex].name);
+            homeTIDs[myIndex] = pthread_self();
+            printf("\t\t<ADD Thread> Aggiunto %s\n", home[myIndex].name);
             strcpy(tempInfo.name, home[myIndex].name);
             tempInfo.status = home[myIndex].status;
             while (true) {
@@ -200,31 +197,55 @@ void * threadHandler(void * clientSocket) {
                 if (tempInfo.status != home[myIndex].status) {
                     send(newSocketFD, &home[myIndex], sizeof(home[myIndex]), 0);
                     tempInfo.status = home[myIndex].status;
-                    printf("\t<ADD Thread> Inviato aggiornamento (%d) all'accessorio (%s)\n", tempInfo.status, tempInfo.name);
+                    printf("\t\t<ADD Thread> Inviato aggiornamento (%d) all'accessorio %s\n", tempInfo.status, tempInfo.name);
+                    if (home[myIndex].status == DELETED) {
+                        printf("\t\t<ADD Thread> %s eliminato\n", tempInfo.name);
+                        pthread_mutex_unlock(&mutex);
+                        if (close(newSocketFD) == 0)
+                            printf("<Thread> Connessione terminata - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
+                        pthread_exit(EXIT_SUCCESS);
+                    }
                 }
             }
-            pthread_mutex_unlock(&mutex);
             break;
         case EXIT_MENU:
             // Exit
-            puts("\t<Thread> Uscita");
+            puts("\t\t<Thread> Uscita");
             break;
         default:
-            puts("\t<Thread> Richiesta non valida");
+            puts("\t\t<Thread> Richiesta non valida");
             break;
         }
     }
 
     if (close(newSocketFD) == 0)
-        printf("\t<Thread> Connessione terminata - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
+        printf("<Thread> Connessione terminata - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
     pthread_exit(EXIT_SUCCESS);
+}
+
+void interruptionHandler(int sig) {
+
 }
 
 void initHome() {
     for (int i = 0; i < MAX_ACCESSORIES; i++) {
         strcpy(home[i].name, "");
         home[i].status = -1;
+        homeTIDs[i] = (pthread_t) -1;
     }
+    homeIndex = 0;
+}
+
+int joinHomeThreads() {
+    for (int i = 0; i < MAX_ACCESSORIES; i++) {
+        if (homeTIDs[i] >= 0) {
+            if (pthread_join(homeTIDs[i], NULL) != 0) {
+                perror("pthread_join");
+                return 1;
+            }
+        }
+    }
+    return 0; 
 }
 
 bool checkName(char * newName) {
