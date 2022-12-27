@@ -29,6 +29,7 @@
 #define BUFF_SIZE 128
 #define DELETED -127
 
+#if defined(_SEM_SEMUN_UNDEFINED)
 union semun {
     int              val;    /* Value for SETVAL */
     struct semid_ds *buf;    /* Buffer for IPC_STAT, IPC_SET */
@@ -36,6 +37,7 @@ union semun {
     struct seminfo  *__buf;  /* Buffer for IPC_INFO
                                 (Linux-specific) */
 };
+#endif
 
 typedef struct {
     char name[128];
