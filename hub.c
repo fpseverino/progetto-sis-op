@@ -23,6 +23,8 @@ pthread_t homeTIDs[MAX_ACCESSORIES];
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 
+bool serverIsRunning = true;
+
 int main() {
     int socketFD, newSocketFD;
     struct sockaddr_in serverAddr;
@@ -66,7 +68,7 @@ int main() {
     }
     printf("<SERVER> Allocato semaforo con ID: %d\n", semID);
 
-    while (true) {
+    while (serverIsRunning) {
         if ((newSocketFD = accept(socketFD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen)) == -1) {
             perror("accept");
             exit(EXIT_FAILURE);
@@ -224,7 +226,7 @@ void * threadHandler(void * clientSocket) {
 }
 
 void interruptionHandler(int sig) {
-
+    serverIsRunning = false;
 }
 
 void initHome() {
