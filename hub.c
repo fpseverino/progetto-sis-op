@@ -13,7 +13,7 @@ void addrInit(struct sockaddr_in *address, long IPaddr, int port);
 void * threadHandler(void * clientSocket);
 void interruptionHandler(int sig);
 void initHome();
-int joinHomeThreads();
+void joinHomeThreads();
 bool checkName(char * newName); // Checks if a name is in the home array
 
 Accessory home[MAX_ACCESSORIES];
@@ -238,16 +238,11 @@ void initHome() {
     homeIndex = 0;
 }
 
-int joinHomeThreads() {
-    for (int i = 0; i < MAX_ACCESSORIES; i++) {
-        if (homeTIDs[i] >= 0) {
-            if (pthread_join(homeTIDs[i], NULL) != 0) {
+void joinHomeThreads() {
+    for (int i = 0; i < MAX_ACCESSORIES; i++)
+        if ((long) homeTIDs[i] >= 0)
+            if (pthread_join(homeTIDs[i], NULL) != 0)
                 perror("pthread_join");
-                return 1;
-            }
-        }
-    }
-    return 0; 
 }
 
 bool checkName(char * newName) {

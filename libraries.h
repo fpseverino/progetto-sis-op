@@ -22,7 +22,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#define PORT 27000
+#define PORT 21000
 #define MAX_CONN 8
 #define MAX_ACCESSORIES 5
 #define EXIT_MENU 8
