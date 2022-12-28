@@ -15,16 +15,22 @@ int main() {
     struct sockaddr_in serverAddr;
     struct sockaddr_in clientAddr;
     int clientLen = sizeof(clientAddr);
-    pid_t pid;
-    int semID;
-    key_t key = ftok(".", 'x');
+
     Packet packet;
+    pid_t pid; // pid of the exec process
     char buff[BUFF_SIZE];
     Accessory tempInfo;
     int accessoryStatus = -1;
     bool OKtoConnect;
 
     puts("\n# Inizio del programma (device)\n");
+
+    int semID = semget(ftok(".", 'x'), 0, 0);
+    if (semID < 0) {
+        perror("semget device");
+        exit(EXIT_FAILURE);
+    }
+    printf("<CLIENT> Ottenuto semaforo con ID: %d\n", semID);
 
     addrInit(&serverAddr, PORT);
     if ((socketFD = socket(PF_INET, SOCK_STREAM, 0)) == -1) {
@@ -38,19 +44,12 @@ int main() {
     getsockname(socketFD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen);
     printf("<CLIENT> Connessione stabilita - Porta server: %d - Porta locale: %d\n", PORT, ntohs(clientAddr.sin_port));
 
-    semID = semget(key, 0, 0);
-    if (semID < 0) {
-        perror("semget device");
-        exit(EXIT_FAILURE);
-    }
-    printf("<CLIENT> Ottenuto semaforo con ID: %d\n", semID);
     
     while ((packet.request = mainMenu(semID)) != EXIT_MENU) {
         switch (packet.request) {
         case 1:
             // Add accessory
-            if (waitSem(semID) != 0)
-                perror("waitSem device");
+            waitSem(semID);
             printf("\nNome dell'accessorio: ");
             fflush(stdin);
             scanf("%s", buff);
@@ -59,12 +58,10 @@ int main() {
             recv(socketFD, &OKtoConnect, sizeof(bool), 0);
             if (!OKtoConnect) {
                 puts("<CLIENT> Aggiunta non andata a buon fine");
-                if (signalSem(semID) != 0)
-                    perror("signalSem device");
+                signalSem(semID);
                 break;
             }
-            if (signalSem(semID) != 0)
-                perror("signalSem device");
+            signalSem(semID);
             switch (pid = fork()) {
             case -1:
                 perror("fork");
@@ -80,8 +77,7 @@ int main() {
             break;
         case 2:
             // Read status of one accessory
-            if (waitSem(semID) != 0)
-                perror("waitSem device");
+            waitSem(semID);
             printf("\nNome dell'accessorio: ");
             fflush(stdin);
             scanf("%s", buff);
@@ -89,27 +85,23 @@ int main() {
             send(socketFD, &packet, sizeof(Packet), 0);
             recv(socketFD, &accessoryStatus, sizeof(accessoryStatus), 0);
             printf("<CLIENT> Risposta del server: %d\n", (int) accessoryStatus);
-            if (signalSem(semID) != 0)
-                perror("signalSem device");
+            signalSem(semID);
             break;
         case 3:
             // Read status of all accessories
             send(socketFD, &packet, sizeof(Packet), 0);
-            if (waitSem(semID) != 0)
-                perror("waitSem device");
+            waitSem(semID);
             puts("");
             for (int i = 0; i < MAX_ACCESSORIES; i++) {
                 recv(socketFD, &tempInfo.name, sizeof(tempInfo.name), 0);
                 recv(socketFD, &tempInfo.status, sizeof(tempInfo.status), 0);
                 printf("%s: %d\n", tempInfo.name, tempInfo.status);
             }
-            if (signalSem(semID) != 0)
-                perror("signalSem device");
+            signalSem(semID);
             break;
         case 4:
             // Update status of one accessory
-            if (waitSem(semID) != 0)
-                perror("waitSem device");
+            waitSem(semID);
             printf("\nNome dell'accessorio: ");
             fflush(stdin);
             scanf("%s", buff);
@@ -119,8 +111,7 @@ int main() {
             scanf("%d", &packet.accessory.status);
             send(socketFD, &packet, sizeof(Packet), 0);
             puts("<CLIENT> Update inviato all'hub");
-            if (signalSem(semID) != 0)
-                perror("signalSem device");
+            signalSem(semID);
             break;
         case 5:
             // Delete all accessories
@@ -147,8 +138,7 @@ void addrInit(struct sockaddr_in *address, int port) {
 }
 
 int mainMenu(int semID) {
-    if (waitSem(semID) != 0)
-        perror("waitSem device");
+    waitSem(semID);
     printf("%s", "\n*** MENU PRINCIPALE ***\n"
         " 1 - Aggiungi accessorio\n"
         " 2 - Visualizza accessorio\n"
@@ -159,7 +149,6 @@ int mainMenu(int semID) {
     int choice;
     fflush(stdin);
     scanf("%d", &choice);
-    if (signalSem(semID) != 0)
-        perror("signalSem device");
+    signalSem(semID);
     return choice;
 }

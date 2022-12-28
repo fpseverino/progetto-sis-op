@@ -9,38 +9,42 @@
 
 struct sockaddr_in clientAddr;
 
-void addrInit(struct sockaddr_in *address, long IPaddr, int port);
-void * threadHandler(void * clientSocket);
-void interruptionHandler(int sig);
-void initHome();
-void joinHomeThreads();
-bool checkName(char * newName); // Checks if a name is in the home array
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 
 Accessory home[MAX_ACCESSORIES];
 int homeIndex;
 pthread_t homeTIDs[MAX_ACCESSORIES];
 
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
-
 bool serverIsRunning = true;
+
+void addrInit(struct sockaddr_in *address, long IPaddr, int port);
+void * connectionHandler(void * clientSocket);
+void initHome();
+void joinHomeThreads();
+bool checkName(char * newName); // Checks if a name is in the home array
 
 int main() {
     int socketFD, newSocketFD;
     struct sockaddr_in serverAddr;
-    int clientLen = sizeof(clientAddr);
+    socklen_t clientLen = sizeof(clientAddr);
+
     pthread_t tid;
-    int semID;
-    key_t key = ftok(".", 'x');
 
     puts("\n# Inizio del programma (hub)\n");
 
-    initHome();
-
-    if (signal(SIGINT, interruptionHandler) != 0) {
-        perror("signal");
+    int semID = semget(ftok(".", 'x'), 1, IPC_CREAT /*| IPC_EXCL*/ | 0666);
+    if (semID < 0) {
+        perror("semget hub");
         exit(EXIT_FAILURE);
     }
+    if (initSem(semID) < 0) {
+        perror("initSem");
+        exit(EXIT_FAILURE);
+    }
+    printf("<SERVER> Allocato semaforo con ID: %d\n", semID);
+
+    initHome();
 
     addrInit(&serverAddr, INADDR_ANY, PORT);
     if ((socketFD = socket(PF_INET, SOCK_STREAM, 0)) == -1) {
@@ -57,25 +61,14 @@ int main() {
     }
     printf("<SERVER> in attesa di connessione sulla porta: %d\n", ntohs(serverAddr.sin_port));
 
-    semID = semget(key, 1, IPC_CREAT /*| IPC_EXCL*/ | 0666);
-    if (semID < 0) {
-        perror("semget hub");
-        exit(EXIT_FAILURE);
-    }
-    if (initSem(semID) < 0) {
-        perror("initSem");
-        exit(EXIT_FAILURE);
-    }
-    printf("<SERVER> Allocato semaforo con ID: %d\n", semID);
-
     while (serverIsRunning) {
-        if ((newSocketFD = accept(socketFD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen)) == -1) {
+        if ((newSocketFD = accept(socketFD, (struct sockaddr *) &clientAddr, &clientLen)) == -1) {
             perror("accept");
             exit(EXIT_FAILURE);
         }
         printf("<SERVER> Connessione accettata - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
 
-        if (pthread_create(&tid, NULL, threadHandler, (void *) &newSocketFD) != 0) {
+        if (pthread_create(&tid, NULL, connectionHandler, (void *) &newSocketFD) != 0) {
             perror("pthread_create");
             exit(EXIT_FAILURE);
         }
@@ -90,8 +83,7 @@ int main() {
 
     joinHomeThreads();
 
-    if (deallocateSem(semID) >= 0)
-        printf("<CLIENT> Deallocato semaforo con ID: %d\n", semID);
+    deallocateSem(semID);
     pthread_mutex_destroy(&mutex);
     pthread_cond_destroy(&cond);
     close(socketFD);
@@ -106,7 +98,7 @@ void addrInit(struct sockaddr_in *address, long IPaddr, int port) {
     address->sin_port = htons(port);
 }
 
-void * threadHandler(void * clientSocket) {
+void * connectionHandler(void * clientSocket) {
     int newSocketFD = * (int *) clientSocket;
     Packet packet;
     Accessory tempInfo; // case 7: checks if accessory status was updated before broadcast
@@ -223,10 +215,6 @@ void * threadHandler(void * clientSocket) {
     if (close(newSocketFD) == 0)
         printf("<Thread> Connessione terminata - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
     pthread_exit(EXIT_SUCCESS);
-}
-
-void interruptionHandler(int sig) {
-    serverIsRunning = false;
 }
 
 void initHome() {
