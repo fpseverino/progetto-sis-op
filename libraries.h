@@ -24,7 +24,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#define PORT 29000
+#define PORT 21000
 #define SERVER_BACKLOG 16
 #define MAX_ACCESSORIES 5
 #define EXIT_MENU 8

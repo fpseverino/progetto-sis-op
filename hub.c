@@ -20,6 +20,8 @@ Accessory home[MAX_ACCESSORIES];
 int homeIndex;
 pthread_t homeTIDs[MAX_ACCESSORIES];
 
+pthread_mutex_t tidMutex = PTHREAD_MUTEX_INITIALIZER;
+
 void addrInit(struct sockaddr_in *address, long IPaddr, int port);
 void * threadHandler(void * arg); // Handler of the threads in the pool
 void requestHandler(int * clientSocket); // Called inside the thread handler
@@ -86,6 +88,8 @@ int main() {
 
     pthread_mutex_destroy(&readWriteMutex);
     pthread_cond_destroy(&updateCond);
+
+    pthread_mutex_destroy(&tidMutex);
 
     close(socketFD);
     close(newSocketFD);
@@ -217,7 +221,6 @@ void requestHandler(int * clientSocket) {
                 home[i].status = DELETED;
             }
             pthread_cond_broadcast(&updateCond);
-            puts("BROADCAST AGGIORNAMENTO");
             pthread_mutex_unlock(&readWriteMutex);
             joinHomeThreads();
             initHome();
@@ -228,7 +231,9 @@ void requestHandler(int * clientSocket) {
             myIndex = homeIndex++;
             strcpy(home[myIndex].name, packet.accessory.name);
             home[myIndex].status = 0;
+            pthread_mutex_lock(&tidMutex);
             homeTIDs[myIndex] = pthread_self();
+            pthread_mutex_unlock(&tidMutex);
             printf("\t\t<ADD Thread> Aggiunto %s\n", home[myIndex].name);
             strcpy(tempInfo.name, home[myIndex].name);
             tempInfo.status = home[myIndex].status;
@@ -272,17 +277,21 @@ void initHome() {
     for (int i = 0; i < MAX_ACCESSORIES; i++) {
         strcpy(home[i].name, "");
         home[i].status = -1;
+        pthread_mutex_lock(&tidMutex);
         homeTIDs[i] = (pthread_t) -1;
+        pthread_mutex_unlock(&tidMutex);
     }
     homeIndex = 0;
     pthread_mutex_unlock(&readWriteMutex);
 }
 
 void joinHomeThreads() {
+    pthread_mutex_lock(&tidMutex);
     for (int i = 0; i < MAX_ACCESSORIES; i++)
         if ((long) homeTIDs[i] >= 0)
             if (pthread_join(homeTIDs[i], NULL) != 0)
                 perror("pthread_join");
+    pthread_mutex_unlock(&tidMutex);
 }
 
 bool checkName(char * newName) {
