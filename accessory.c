@@ -13,7 +13,6 @@ Packet packet;
 void addrInit(struct sockaddr_in *address, int port);
 
 int main(int argc, const char * argv[]) {
-    int socketFD;
     struct sockaddr_in serverAddr;
     struct sockaddr_in clientAddr;
     int clientLen = sizeof(clientAddr);
