@@ -35,3 +35,10 @@ int signalSem(int semID) {
     operations[0].sem_flg = SEM_UNDO; // automatic UNDO at exit
     return semop(semID, operations, 1); 
 }
+
+void check(int result, char * message) {
+    if (result < 0) {
+        perror(message);
+        exit(EXIT_FAILURE);
+    }
+}

@@ -7,8 +7,6 @@
 
 #include "libraries.h"
 
-struct sockaddr_in clientAddr;
-
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 
@@ -25,8 +23,8 @@ void joinHomeThreads();
 bool checkName(char * newName); // Checks if a name is in the home array
 
 int main() {
-    int socketFD, newSocketFD;
-    struct sockaddr_in serverAddr;
+    int newSocketFD;
+    struct sockaddr_in serverAddr, clientAddr;
     socklen_t clientLen = sizeof(clientAddr);
 
     pthread_t tid;
@@ -34,44 +32,24 @@ int main() {
     puts("\n# Inizio del programma (hub)\n");
 
     int semID = semget(ftok(".", 'x'), 1, IPC_CREAT /*| IPC_EXCL*/ | 0666);
-    if (semID < 0) {
-        perror("semget hub");
-        exit(EXIT_FAILURE);
-    }
-    if (initSem(semID) < 0) {
-        perror("initSem");
-        exit(EXIT_FAILURE);
-    }
+    check(semID, "semget hub");
+    check(initSem(semID), "initSem");
     printf("<SERVER> Allocato semaforo con ID: %d\n", semID);
 
     initHome();
 
     addrInit(&serverAddr, INADDR_ANY, PORT);
-    if ((socketFD = socket(PF_INET, SOCK_STREAM, 0)) == -1) {
-        perror("socket");
-        exit(EXIT_FAILURE);
-    }
-    if (bind(socketFD, (struct sockaddr *) &serverAddr, sizeof(serverAddr)) == -1) {
-        perror("bind");
-        exit(EXIT_FAILURE);
-    }
-    if (listen(socketFD, MAX_CONN) < 0) {
-        perror("listen");
-        exit(EXIT_FAILURE);
-    }
+    int socketFD = socket(PF_INET, SOCK_STREAM, 0);
+    check(socketFD, "socket");
+    check(bind(socketFD, (struct sockaddr *) &serverAddr, sizeof(serverAddr)), "bind");
+    check(listen(socketFD, MAX_CONN), "listen");
     printf("<SERVER> in attesa di connessione sulla porta: %d\n", ntohs(serverAddr.sin_port));
 
     while (serverIsRunning) {
-        if ((newSocketFD = accept(socketFD, (struct sockaddr *) &clientAddr, &clientLen)) == -1) {
-            perror("accept");
-            exit(EXIT_FAILURE);
-        }
+        newSocketFD = accept(socketFD, (struct sockaddr *) &clientAddr, &clientLen);
+        check(newSocketFD, "accept");
         printf("<SERVER> Connessione accettata - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
-
-        if (pthread_create(&tid, NULL, connectionHandler, (void *) &newSocketFD) != 0) {
-            perror("pthread_create");
-            exit(EXIT_FAILURE);
-        }
+        check(pthread_create(&tid, NULL, connectionHandler, (void *) &newSocketFD), "pthread_create");
     }
 
     pthread_mutex_lock(&mutex);
@@ -107,7 +85,7 @@ void * connectionHandler(void * clientSocket) {
     int myIndex; // case 7: keeps the array index of the accessory to update
     bool OKtoConnect = true; // case 1
 
-    printf("<Thread> Gestisco connessione - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
+    printf("<Thread> Gestisco connessione\n");
     while (packet.request != EXIT_MENU) {
         recv(newSocketFD, &packet, sizeof(Packet), 0);
         printf("\t<Thread> Richiesta ricevuta: %d\n", packet.request);
@@ -196,7 +174,7 @@ void * connectionHandler(void * clientSocket) {
                         printf("\t\t<ADD Thread> %s eliminato\n", tempInfo.name);
                         pthread_mutex_unlock(&mutex);
                         if (close(newSocketFD) == 0)
-                            printf("<Thread> Connessione terminata - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
+                            printf("<Thread> Connessione terminata\n");
                         pthread_exit(EXIT_SUCCESS);
                     }
                 }
@@ -213,7 +191,7 @@ void * connectionHandler(void * clientSocket) {
     }
 
     if (close(newSocketFD) == 0)
-        printf("<Thread> Connessione terminata - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
+        printf("<Thread> Connessione terminata\n");
     pthread_exit(EXIT_SUCCESS);
 }
 

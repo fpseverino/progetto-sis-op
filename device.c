@@ -11,7 +11,6 @@ void addrInit(struct sockaddr_in *address, int port);
 int mainMenu(int semID);
 
 int main() {
-    int socketFD;
     struct sockaddr_in serverAddr;
     struct sockaddr_in clientAddr;
     int clientLen = sizeof(clientAddr);
@@ -26,21 +25,13 @@ int main() {
     puts("\n# Inizio del programma (device)\n");
 
     int semID = semget(ftok(".", 'x'), 0, 0);
-    if (semID < 0) {
-        perror("semget device");
-        exit(EXIT_FAILURE);
-    }
+    check(semID, "semget device");
     printf("<CLIENT> Ottenuto semaforo con ID: %d\n", semID);
 
     addrInit(&serverAddr, PORT);
-    if ((socketFD = socket(PF_INET, SOCK_STREAM, 0)) == -1) {
-        perror("socket");
-        exit(EXIT_FAILURE);
-    }
-    if (connect(socketFD, (struct sockaddr *) &serverAddr, sizeof(serverAddr)) == -1) {
-        perror("connect");
-        exit(EXIT_FAILURE);
-    }
+    int socketFD = socket(PF_INET, SOCK_STREAM, 0);
+    check(socketFD, "socket");
+    check(connect(socketFD, (struct sockaddr *) &serverAddr, sizeof(serverAddr)), "connect");
     getsockname(socketFD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen);
     printf("<CLIENT> Connessione stabilita - Porta server: %d - Porta locale: %d\n", PORT, ntohs(clientAddr.sin_port));
 

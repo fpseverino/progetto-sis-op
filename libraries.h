@@ -66,4 +66,6 @@ int initSem(int semID);
 int waitSem(int semID);
 int signalSem(int semID);
 
+void check(int result, char * message);
+
 #endif

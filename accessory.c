@@ -19,24 +19,16 @@ int main(int argc, const char * argv[]) {
     int clientLen = sizeof(clientAddr);
 
     int semID = semget(ftok(".", 'x'), 0, 0);
-    if (semID < 0) {
-        perror("semget accessory");
-        exit(EXIT_FAILURE);
-    }
+    check(semID, "semget accessory");
 
     strcpy(myInfo.name, argv[1]);
     strcpy(packet.accessory.name, argv[1]);
     packet.request = 7;
 
     addrInit(&serverAddr, PORT);
-    if ((socketFD = socket(PF_INET, SOCK_STREAM, 0)) == -1) {
-        perror("socket");
-        exit(EXIT_FAILURE);
-    }
-    if (connect(socketFD, (struct sockaddr *) &serverAddr, sizeof(serverAddr)) == -1) {
-        perror("connect");
-        exit(EXIT_FAILURE);
-    }
+    int socketFD = socket(PF_INET, SOCK_STREAM, 0);
+    check(socketFD, "socket");
+    check(connect(socketFD, (struct sockaddr *) &serverAddr, sizeof(serverAddr)), "connect");
     getsockname(socketFD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen);
 
     send(socketFD, &packet, sizeof(packet), 0);
