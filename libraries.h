@@ -5,8 +5,8 @@
 //  Created by Francesco Paolo Severino and Roberto Giovanni Scolari on 13/12/22.
 //
 
-#ifndef LIBRARIES_H
-#define LIBRARIES_H
+#ifndef LIBRARIES_H_
+#define LIBRARIES_H_
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,6 +15,8 @@
 #include <string.h>
 #include <signal.h>
 #include <pthread.h>
+#include <semaphore.h>
+#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/sem.h>
@@ -22,12 +24,13 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#define PORT 21000
-#define MAX_CONN 8
+#define PORT 29000
+#define SERVER_BACKLOG 16
 #define MAX_ACCESSORIES 5
 #define EXIT_MENU 8
 #define BUFF_SIZE 128
 #define DELETED -127
+#define THREAD_POOL_SIZE 16
 
 #if defined(_SEM_SEMUN_UNDEFINED)
 union semun {
@@ -38,6 +41,12 @@ union semun {
                                 (Linux-specific) */
 };
 #endif
+
+struct node {
+    struct node * next;
+    int * clientSocket;
+};
+typedef struct node Node;
 
 typedef struct {
     char name[128];
@@ -60,6 +69,9 @@ typedef struct {
     7 = Add accessory to hub (accessory)
     8 = Exit
 */
+
+void enqueue(int *clientSocket);
+int * dequeue();
 
 int deallocateSem(int semID);
 int initSem(int semID);
