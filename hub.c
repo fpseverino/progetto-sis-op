@@ -237,10 +237,7 @@ void requestHandler(int * clientSocket) {
             printf("\t\t<ADD Thread> Aggiunto %s\n", home[myIndex].name);
             strcpy(tempInfo.name, home[myIndex].name);
             tempInfo.status = home[myIndex].status;
-            pthread_mutex_unlock(&readWriteMutex);
-            
             while (true) {
-                pthread_mutex_lock(&readWriteMutex);
                 pthread_cond_wait(&updateCond, &readWriteMutex);
                 if (tempInfo.status != home[myIndex].status) {
                     send(newSocketFD, &home[myIndex], sizeof(home[myIndex]), 0);
@@ -254,7 +251,6 @@ void requestHandler(int * clientSocket) {
                         pthread_exit(EXIT_SUCCESS);
                     }
                 }
-                pthread_mutex_unlock(&readWriteMutex);
             }
             break;
         case EXIT_MENU:
