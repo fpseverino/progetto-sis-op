@@ -13,8 +13,8 @@ pthread_cond_t threadPoolCond = PTHREAD_COND_INITIALIZER;
 
 sem_t * readSem;
 pthread_mutex_t readWriteMutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t updateCond = PTHREAD_COND_INITIALIZER;
 int readCount = 0;
+pthread_cond_t updateCond = PTHREAD_COND_INITIALIZER;
 
 Accessory home[MAX_ACCESSORIES];
 int homeIndex;
@@ -23,14 +23,16 @@ pthread_t homeTIDs[MAX_ACCESSORIES];
 pthread_mutex_t tidMutex = PTHREAD_MUTEX_INITIALIZER;
 
 void addrInit(struct sockaddr_in *address, long IPaddr, int port);
+
 void * threadHandler(void * arg); // Handler of the threads in the pool
 void requestHandler(int * clientSocket); // Called inside the thread handler
+
 void initHome();
 void joinHomeThreads();
 bool checkName(char * newName); // Checks if a name is in the home array
 
 int main() {
-    int newSocketFD, clientLen;
+    int socketFD, newSocketFD, clientLen;
     struct sockaddr_in serverAddr, clientAddr;
 
     puts("\n# Inizio del programma (hub)\n");
@@ -54,8 +56,7 @@ int main() {
     }
 
     addrInit(&serverAddr, INADDR_ANY, PORT);
-    int socketFD = socket(PF_INET, SOCK_STREAM, 0);
-    check(socketFD, "socket");
+    check(socketFD = socket(PF_INET, SOCK_STREAM, 0), "socket");
     check(bind(socketFD, (struct sockaddr *) &serverAddr, sizeof(serverAddr)), "bind");
     check(listen(socketFD, SERVER_BACKLOG), "listen");
     printf("<SERVER> in attesa di connessione sulla porta: %d\n", ntohs(serverAddr.sin_port));
@@ -79,24 +80,26 @@ int main() {
     }
     pthread_cond_broadcast(&updateCond);
     pthread_mutex_unlock(&readWriteMutex);
-
     joinHomeThreads();
+    puts("<SERVER> Eliminati tutti gli accessori");
 
     deallocateSem(semID);
-
-    pthread_mutex_destroy(&threadPoolMutex);
-    pthread_cond_destroy(&threadPoolCond);
+    puts("<SERVER> Deallocato semaforo System V");
 
     check(sem_close(readSem), "sem_close");
     check(sem_unlink("progSisOpR"), "sem_unlink");
+    puts("<SERVER> Eliminato semaforo POSIX");
 
+    pthread_mutex_destroy(&threadPoolMutex);
+    pthread_cond_destroy(&threadPoolCond);
     pthread_mutex_destroy(&readWriteMutex);
     pthread_cond_destroy(&updateCond);
-
     pthread_mutex_destroy(&tidMutex);
+    puts("<SERVER> Distrutti mutex e cond");
 
     close(socketFD);
     close(newSocketFD);
+    puts("<SERVER> Socket chiuse");
 
     puts("\n# Fine del programma (hub)\n");
     exit(EXIT_SUCCESS);
