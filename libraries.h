@@ -72,9 +72,6 @@ typedef struct {
     8 = Exit
 */
 
-void enqueue(int *clientSocket);
-int * dequeue();
-
 int deallocateSem(int semID);
 int initSem(int semID, int initiaValue);
 int waitSem(int semID);
