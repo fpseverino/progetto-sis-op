@@ -9,8 +9,15 @@
 
 pthread_t threadPool[THREAD_POOL_SIZE];
 
-// Reader-writer semaphores
-sem_t * readSem;
+int msgID; // Messages queue
+
+// Producer-consumer semaphores
+pthread_mutex_t queueMutex = PTHREAD_MUTEX_INITIALIZER;
+sem_t * emptyQueueSem;
+sem_t * fullQueueSem;
+
+// Reader-writer mutexes
+pthread_mutex_t readMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t readWriteMutex = PTHREAD_MUTEX_INITIALIZER;
 int readCount = 0;
 pthread_cond_t updateCond = PTHREAD_COND_INITIALIZER; // Broadcasts update to accessory threads
@@ -21,8 +28,7 @@ pthread_t homeTIDs[MAX_ACCESSORIES];
 
 pthread_mutex_t tidMutex = PTHREAD_MUTEX_INITIALIZER;
 
-pid_t childPID;
-int msgID;
+bool serverIsRunning = true;
 
 void addrInit(struct sockaddr_in *address, long IPaddr, int port);
 
@@ -50,13 +56,19 @@ int main() {
     check(initSem(printSemID, 1), "initSem");
     printf("<SERVER> Allocato semaforo System V con ID: %d\n", printSemID);
 
-    // Semaphore used for solving reader-writer problem
-    readSem = sem_open("progSisOpR", O_CREAT /*| O_EXCL*/, 0666, 1);
-    if (readSem == SEM_FAILED) {
+    // Semaphore used for solving producer-consumer problem
+    emptyQueueSem = sem_open("progSisOpE", O_CREAT /*| O_EXCL*/, 0666, MAX_REQUEST);
+    if (emptyQueueSem == SEM_FAILED) {
         perror("sem_open");
         exit(EXIT_FAILURE);
     }
-    puts("<SERVER> Allocato semaforo POSIX -progSisOpR-");
+    puts("<SERVER> Allocato semaforo POSIX -progSisOpE-");
+    fullQueueSem = sem_open("progSisOpF", O_CREAT /*| O_EXCL*/, 0666, 0);
+    if (fullQueueSem == SEM_FAILED) {
+        perror("sem_open");
+        exit(EXIT_FAILURE);
+    }
+    puts("<SERVER> Allocato semaforo POSIX -progSisOpF-");
 
     check(msgID = msgget(IPC_PRIVATE, IPC_CREAT | 0666), "msgget");
     printf("<SERVER> Creata coda di messaggi con ID: %d\n", msgID);
@@ -74,27 +86,19 @@ int main() {
     check(listen(socketFD, SERVER_BACKLOG), "listen");
     printf("<SERVER> in attesa di connessione sulla porta: %d\n", ntohs(serverAddr.sin_port));
 
-    switch (childPID = fork()) {
-    case -1:
-        perror("fork");
-        exit(EXIT_FAILURE);
-        break;
-    case 0:
-        while (true) {
-            clientLen = sizeof(clientAddr);
-            check(newSocketFD = accept(socketFD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen), "accept");
-            printf("<SERVER> Connessione accettata - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
+    while (serverIsRunning) {
+        clientLen = sizeof(clientAddr);
+        check(newSocketFD = accept(socketFD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen), "accept");
+        printf("<SERVER> Connessione accettata - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
 
-            Message clientSocket;
-            clientSocket.type = MSG_TYPE;
-            printf("socket mandata: %d\n", newSocketFD);
-            clientSocket.socket = newSocketFD;
-            check(msgsnd(msgID, &clientSocket, sizeof(Message), 0), "msgsnd");
-        }
-        break;
-    default:
-        waitpid(childPID, NULL, 0);
-        break;
+        Message clientSocket;
+        clientSocket.type = MSG_TYPE;
+        clientSocket.socket = newSocketFD;
+        sem_wait(emptyQueueSem);
+        pthread_mutex_lock(&queueMutex);
+        check(msgsnd(msgID, &clientSocket, sizeof(Message), 0), "msgsnd");
+        pthread_mutex_unlock(&queueMutex);
+        sem_post(fullQueueSem);
     }
 
     pthread_mutex_lock(&readWriteMutex);
@@ -105,16 +109,23 @@ int main() {
     joinHomeThreads();
     puts("<SERVER> Eliminati tutti gli accessori");
 
-    deallocateSem(printSemID);
-    puts("<SERVER> Deallocato semaforo System V");
-
-    check(sem_close(readSem), "sem_close");
-    check(sem_unlink("progSisOpR"), "sem_unlink");
-    puts("<SERVER> Eliminato semaforo POSIX");
+    for (int i = 0; i < THREAD_POOL_SIZE; i++)
+        pthread_cancel(threadPool[i]);
+    puts("<SERVER> Eliminati tutti i thread della pool");
 
     check(msgctl(msgID, IPC_RMID, NULL), "msgctl");
     puts("<SERVER> Eliminata coda di messaggi");
 
+    deallocateSem(printSemID);
+    puts("<SERVER> Deallocato semaforo System V");
+
+    check(sem_close(emptyQueueSem), "sem_close");
+    check(sem_unlink("progSisOpE"), "sem_unlink");
+    check(sem_close(fullQueueSem), "sem_close");
+    check(sem_unlink("progSisOpF"), "sem_unlink");
+    puts("<SERVER> Eliminati semafori POSIX");
+
+    pthread_mutex_destroy(&readMutex);
     pthread_mutex_destroy(&readWriteMutex);
     pthread_cond_destroy(&updateCond);
 
@@ -138,8 +149,11 @@ void addrInit(struct sockaddr_in *address, long IPaddr, int port) {
 void * threadHandler(void * arg) {
     while (true) {
         Message clientSocket;
+        sem_wait(fullQueueSem);
+        pthread_mutex_lock(&queueMutex);
         check(msgrcv(msgID, &clientSocket, sizeof(Message), MSG_TYPE, 0), "msgrcv");
-        printf("socket ricevuta: %d\n", clientSocket.socket);
+        pthread_mutex_unlock(&queueMutex);
+        sem_post(emptyQueueSem);
         requestHandler(clientSocket.socket);
     }
 }
@@ -260,23 +274,23 @@ void requestHandler(int newSocketFD) {
 }
 
 void startReading() {
-    sem_wait(readSem);
+    pthread_mutex_lock(&readMutex);
     readCount++;
     if (readCount == 1)
         pthread_mutex_lock(&readWriteMutex);
-    sem_post(readSem);
+    pthread_mutex_unlock(&readMutex);
 }
 
 void endReading() {
-    sem_wait(readSem);
+    pthread_mutex_lock(&readMutex);
     readCount--;
     if (readCount == 0)
         pthread_mutex_unlock(&readWriteMutex);
-    sem_post(readSem);
+    pthread_mutex_unlock(&readMutex);
 }
 
 void signalHandler(int sig) {
-    kill(childPID, SIGKILL);
+    serverIsRunning = false;
 }
 
 void initHome() {

@@ -27,14 +27,15 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#define PORT 23333
-#define SERVER_BACKLOG 16
+#define PORT 21215
+#define SERVER_BACKLOG 100
 #define MAX_ACCESSORIES 5
 #define EXIT_MENU 8
 #define BUFF_SIZE 128
 #define DELETED -127
 #define THREAD_POOL_SIZE 16
 #define MSG_TYPE 1
+#define MAX_REQUEST 32
 
 #if defined(_SEM_SEMUN_UNDEFINED)
 union semun {
