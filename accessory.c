@@ -39,7 +39,7 @@ int main(int argc, const char * argv[]) {
         recv(socketFD, &myInfo, sizeof(myInfo), 0);
         waitSem(printSemID);
         if (myInfo.status == DELETED) {
-            printf("\t<%s> Eliminato\n", myInfo.name);
+            printf("\n\t<%s> Eliminato", myInfo.name);
             signalSem(printSemID);
             break;
         } else {

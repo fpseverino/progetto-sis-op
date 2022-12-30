@@ -7,6 +7,9 @@
 
 #include "libraries.h"
 
+struct sockaddr_in clientAddr;
+int socketFD, newSocketFD, clientLen;
+
 pthread_t threadPool[THREAD_POOL_SIZE];
 
 int msgID; // Messages queue
@@ -29,11 +32,14 @@ pthread_t homeTIDs[MAX_ACCESSORIES];
 pthread_mutex_t tidMutex = PTHREAD_MUTEX_INITIALIZER;
 
 bool serverIsRunning = true;
+pthread_t tid;
 
 void addrInit(struct sockaddr_in *address, long IPaddr, int port);
 
 void * threadHandler(void * arg); // Handler of the threads in the pool
 void requestHandler(int newSocketFD); // Called inside the thread handler
+
+void * acceptConnection(void * arg);
 
 // Reader-writer problem
 void startReading();
@@ -46,8 +52,8 @@ void joinHomeThreads();
 bool checkName(char * newName); // Checks if a name is in the home array
 
 int main() {
-    int socketFD, newSocketFD, clientLen, printSemID;
-    struct sockaddr_in serverAddr, clientAddr;
+    int printSemID;
+    struct sockaddr_in serverAddr;
 
     puts("\n# Inizio del programma (hub)\n");
 
@@ -87,18 +93,8 @@ int main() {
     printf("<SERVER> in attesa di connessione sulla porta: %d\n", ntohs(serverAddr.sin_port));
 
     while (serverIsRunning) {
-        clientLen = sizeof(clientAddr);
-        check(newSocketFD = accept(socketFD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen), "accept");
-        printf("<SERVER> Connessione accettata - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
-
-        Message clientSocket;
-        clientSocket.type = MSG_TYPE;
-        clientSocket.socket = newSocketFD;
-        sem_wait(emptyQueueSem);
-        pthread_mutex_lock(&queueMutex);
-        check(msgsnd(msgID, &clientSocket, sizeof(Message), 0), "msgsnd");
-        pthread_mutex_unlock(&queueMutex);
-        sem_post(fullQueueSem);
+        pthread_create(&tid, NULL, acceptConnection, NULL);
+        pthread_join(tid, NULL);
     }
 
     pthread_mutex_lock(&readWriteMutex);
@@ -273,6 +269,22 @@ void requestHandler(int newSocketFD) {
     pthread_exit(EXIT_SUCCESS);
 }
 
+void * acceptConnection(void * arg) {
+    clientLen = sizeof(clientAddr);
+    check(newSocketFD = accept(socketFD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen), "accept");
+    printf("<SERVER> Connessione accettata - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
+
+    Message clientSocket;
+    clientSocket.type = MSG_TYPE;
+    clientSocket.socket = newSocketFD;
+    sem_wait(emptyQueueSem);
+    pthread_mutex_lock(&queueMutex);
+    check(msgsnd(msgID, &clientSocket, sizeof(Message), 0), "msgsnd");
+    pthread_mutex_unlock(&queueMutex);
+    sem_post(fullQueueSem);
+    pthread_exit(EXIT_SUCCESS);
+}
+
 void startReading() {
     pthread_mutex_lock(&readMutex);
     readCount++;
@@ -291,6 +303,7 @@ void endReading() {
 
 void signalHandler(int sig) {
     serverIsRunning = false;
+    pthread_cancel(tid);
 }
 
 void initHome() {
