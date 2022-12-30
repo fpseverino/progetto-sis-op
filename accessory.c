@@ -13,40 +13,39 @@ Packet packet;
 void addrInit(struct sockaddr_in *address, int port);
 
 int main(int argc, const char * argv[]) {
+    int socketFD, printSemID;
     struct sockaddr_in serverAddr;
     struct sockaddr_in clientAddr;
     int clientLen = sizeof(clientAddr);
 
-    int semID = semget(ftok(".", 'x'), 0, 0);
-    check(semID, "semget accessory");
+    check(printSemID = semget(ftok(".", 'x'), 0, 0), "semget accessory");
 
     strcpy(myInfo.name, argv[1]);
     strcpy(packet.accessory.name, argv[1]);
     packet.request = 7;
 
     addrInit(&serverAddr, PORT);
-    int socketFD = socket(PF_INET, SOCK_STREAM, 0);
-    check(socketFD, "socket");
+    check(socketFD = socket(PF_INET, SOCK_STREAM, 0), "socket");
     check(connect(socketFD, (struct sockaddr *) &serverAddr, sizeof(serverAddr)), "connect");
     getsockname(socketFD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen);
 
     send(socketFD, &packet, sizeof(packet), 0);
 
-    waitSem(semID);
+    waitSem(printSemID);
     printf("\t<%s> Connessione stabilita - Porta server: %d - Porta locale: %d\n", myInfo.name, PORT, ntohs(clientAddr.sin_port));
-    signalSem(semID);
+    signalSem(printSemID);
     
     while (true) {
         recv(socketFD, &myInfo, sizeof(myInfo), 0);
-        waitSem(semID);
+        waitSem(printSemID);
         if (myInfo.status == DELETED) {
             printf("\t<%s> Eliminato\n", myInfo.name);
-            signalSem(semID);
+            signalSem(printSemID);
             break;
         } else {
             printf("\t<%s> Nuovo status: %d\n", myInfo.name, myInfo.status);
         }
-        signalSem(semID);
+        signalSem(printSemID);
     }
 
     close(socketFD);

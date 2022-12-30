@@ -42,10 +42,10 @@ int deallocateSem(int semID) {
     return semctl(semID, 0, IPC_RMID, useless);
 }
 
-int initSem(int semID) {
+int initSem(int semID, int initiaValue) {
     union semun argument;
     unsigned short values[1];
-    values[0] = 1; // initial value
+    values[0] = initiaValue; // initial value
     argument.array = values;
     return semctl(semID, 0, SETALL, argument);
 }

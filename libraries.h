@@ -18,8 +18,10 @@
 #include <semaphore.h>
 #include <fcntl.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/ipc.h>
 #include <sys/sem.h>
+#include <sys/shm.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -74,7 +76,7 @@ void enqueue(int *clientSocket);
 int * dequeue();
 
 int deallocateSem(int semID);
-int initSem(int semID);
+int initSem(int semID, int initiaValue);
 int waitSem(int semID);
 int signalSem(int semID);
 
