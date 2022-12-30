@@ -39,7 +39,7 @@ int main() {
 
     int semID = semget(ftok(".", 'x'), 1, IPC_CREAT /*| IPC_EXCL*/ | 0666);
     check(semID, "semget hub");
-    check(initSem(semID), "initSem");
+    check(initSem(semID, 1), "initSem");
     printf("<SERVER> Allocato semaforo System V con ID: %d\n", semID);
 
     readSem = sem_open("progSisOpR", O_CREAT /*| O_EXCL*/, 0666, 1);
