@@ -23,6 +23,8 @@ pthread_t homeTIDs[MAX_ACCESSORIES];
 
 pthread_mutex_t tidMutex = PTHREAD_MUTEX_INITIALIZER;
 
+bool serverIsRunning = true;
+
 void addrInit(struct sockaddr_in *address, long IPaddr, int port);
 
 void * threadHandler(void * arg); // Handler of the threads in the pool
@@ -32,20 +34,22 @@ void requestHandler(int * clientSocket); // Called inside the thread handler
 void startReading();
 void endReading();
 
+void signalHandler(int sig);
+
 void initHome();
 void joinHomeThreads();
 bool checkName(char * newName); // Checks if a name is in the home array
 
 int main() {
-    int socketFD, newSocketFD, clientLen, semID;
+    int socketFD, newSocketFD, clientLen, printSemID;
     struct sockaddr_in serverAddr, clientAddr;
 
     puts("\n# Inizio del programma (hub)\n");
 
     // Semaphore used by device and accessories for printing
-    check(semID = semget(ftok(".", 'x'), 1, IPC_CREAT /*| IPC_EXCL*/ | 0666), "semget hub");
-    check(initSem(semID, 1), "initSem");
-    printf("<SERVER> Allocato semaforo System V con ID: %d\n", semID);
+    check(printSemID = semget(ftok(".", 'x'), 1, IPC_CREAT /*| IPC_EXCL*/ | 0666), "semget hub");
+    check(initSem(printSemID, 1), "initSem");
+    printf("<SERVER> Allocato semaforo System V con ID: %d\n", printSemID);
 
     // Semaphore used for solving reader-writer problem
     readSem = sem_open("progSisOpR", O_CREAT /*| O_EXCL*/, 0666, 1);
@@ -54,6 +58,8 @@ int main() {
         exit(EXIT_FAILURE);
     }
     puts("<SERVER> Allocato semaforo POSIX -progSisOpR-");
+
+    signal(SIGINT, signalHandler);
 
     initHome();
 
@@ -66,7 +72,7 @@ int main() {
     check(listen(socketFD, SERVER_BACKLOG), "listen");
     printf("<SERVER> in attesa di connessione sulla porta: %d\n", ntohs(serverAddr.sin_port));
 
-    while (true) {
+    while (serverIsRunning) {
         clientLen = sizeof(clientAddr);
         check(newSocketFD = accept(socketFD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen), "accept");
         printf("<SERVER> Connessione accettata - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
@@ -87,7 +93,7 @@ int main() {
     joinHomeThreads();
     puts("<SERVER> Eliminati tutti gli accessori");
 
-    deallocateSem(semID);
+    deallocateSem(printSemID);
     puts("<SERVER> Deallocato semaforo System V");
 
     check(sem_close(readSem), "sem_close");
@@ -261,6 +267,10 @@ void endReading() {
     if (readCount == 0)
         pthread_mutex_unlock(&readWriteMutex);
     sem_post(readSem);
+}
+
+void signalHandler(int sig) {
+    serverIsRunning = false;
 }
 
 void initHome() {
