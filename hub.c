@@ -11,10 +11,11 @@ pthread_t threadPool[THREAD_POOL_SIZE];
 pthread_mutex_t threadPoolMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t threadPoolCond = PTHREAD_COND_INITIALIZER;
 
+// Reader-writer semaphores
 sem_t * readSem;
 pthread_mutex_t readWriteMutex = PTHREAD_MUTEX_INITIALIZER;
 int readCount = 0;
-pthread_cond_t updateCond = PTHREAD_COND_INITIALIZER;
+pthread_cond_t updateCond = PTHREAD_COND_INITIALIZER; // Broadcasts update to accessory threads
 
 Accessory home[MAX_ACCESSORIES];
 int homeIndex;
@@ -32,13 +33,12 @@ void joinHomeThreads();
 bool checkName(char * newName); // Checks if a name is in the home array
 
 int main() {
-    int socketFD, newSocketFD, clientLen;
+    int socketFD, newSocketFD, clientLen, semID;
     struct sockaddr_in serverAddr, clientAddr;
 
     puts("\n# Inizio del programma (hub)\n");
 
-    int semID = semget(ftok(".", 'x'), 1, IPC_CREAT /*| IPC_EXCL*/ | 0666);
-    check(semID, "semget hub");
+    check(semID = semget(ftok(".", 'x'), 1, IPC_CREAT /*| IPC_EXCL*/ | 0666), "semget hub");
     check(initSem(semID, 1), "initSem");
     printf("<SERVER> Allocato semaforo System V con ID: %d\n", semID);
 
