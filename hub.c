@@ -11,10 +11,6 @@ pthread_t threadPool[THREAD_POOL_SIZE];
 pthread_mutex_t threadPoolMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t threadPoolCond = PTHREAD_COND_INITIALIZER;
 
-// Queue
-Node * head = NULL;
-Node * tail = NULL;
-
 // Reader-writer semaphores
 sem_t * readSem;
 pthread_mutex_t readWriteMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -31,10 +27,6 @@ void addrInit(struct sockaddr_in *address, long IPaddr, int port);
 
 void * threadHandler(void * arg); // Handler of the threads in the pool
 void requestHandler(int * clientSocket); // Called inside the thread handler
-
-// Queue
-void enqueue(int *clientSocket);
-int * dequeue();
 
 // Reader-writer problem
 void startReading();
@@ -253,34 +245,6 @@ void requestHandler(int * clientSocket) {
     if (close(newSocketFD) == 0)
         printf("<Thread> Connessione terminata\n");
     pthread_exit(EXIT_SUCCESS);
-}
-
-void enqueue(int * clientSocket) {
-    Node * newNode = malloc(sizeof(Node));
-    newNode->clientSocket = clientSocket;
-    newNode->next = NULL;
-    if (tail == NULL) {
-        head = newNode;
-    } else {
-        tail->next = newNode;
-    }
-    tail = newNode;
-}
-
-// returns NULL if the queue is empty.
-// Returns the pointer to a clientSocket, if there is one to get
-int * dequeue() {
-    if (head == NULL) {
-        return NULL;
-    } else {
-        int * result = head->clientSocket;
-        Node * temp = head;
-        head = head->next;
-        if (head == NULL)
-            tail = NULL;
-        free(temp);
-        return result;
-    }
 }
 
 void startReading() {

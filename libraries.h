@@ -72,6 +72,11 @@ typedef struct {
     8 = Exit
 */
 
+// Queue
+void enqueue(int *clientSocket);
+int * dequeue();
+
+// System V semaphores
 int deallocateSem(int semID);
 int initSem(int semID, int initiaValue);
 int waitSem(int semID);
