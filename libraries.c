@@ -31,8 +31,9 @@ int * dequeue() {
         int * result = head->clientSocket;
         Node * temp = head;
         head = head->next;
-        if (head == NULL) {tail = NULL;}
-        free (temp) ;
+        if (head == NULL)
+            tail = NULL;
+        free(temp);
         return result;
     }
 }

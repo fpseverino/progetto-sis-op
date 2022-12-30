@@ -28,6 +28,10 @@ void addrInit(struct sockaddr_in *address, long IPaddr, int port);
 void * threadHandler(void * arg); // Handler of the threads in the pool
 void requestHandler(int * clientSocket); // Called inside the thread handler
 
+// Reader-writer problem
+void startReading();
+void endReading();
+
 void initHome();
 void joinHomeThreads();
 bool checkName(char * newName); // Checks if a name is in the home array
@@ -38,10 +42,12 @@ int main() {
 
     puts("\n# Inizio del programma (hub)\n");
 
+    // Semaphore used by device and accessories for printing
     check(semID = semget(ftok(".", 'x'), 1, IPC_CREAT /*| IPC_EXCL*/ | 0666), "semget hub");
     check(initSem(semID, 1), "initSem");
     printf("<SERVER> Allocato semaforo System V con ID: %d\n", semID);
 
+    // Semaphore used for solving reader-writer problem
     readSem = sem_open("progSisOpR", O_CREAT /*| O_EXCL*/, 0666, 1);
     if (readSem == SEM_FAILED) {
         perror("sem_open");
@@ -51,9 +57,8 @@ int main() {
 
     initHome();
 
-    for (int i = 0; i < THREAD_POOL_SIZE; i++) {
+    for (int i = 0; i < THREAD_POOL_SIZE; i++)
         pthread_create(&threadPool[i], NULL, threadHandler, NULL);
-    }
 
     addrInit(&serverAddr, INADDR_ANY, PORT);
     check(socketFD = socket(PF_INET, SOCK_STREAM, 0), "socket");
@@ -75,9 +80,8 @@ int main() {
     }
 
     pthread_mutex_lock(&readWriteMutex);
-    for (int i = 0; i < MAX_ACCESSORIES; i++) {
+    for (int i = 0; i < MAX_ACCESSORIES; i++)
         home[i].status = DELETED;
-    }
     pthread_cond_broadcast(&updateCond);
     pthread_mutex_unlock(&readWriteMutex);
     joinHomeThreads();
@@ -92,8 +96,10 @@ int main() {
 
     pthread_mutex_destroy(&threadPoolMutex);
     pthread_cond_destroy(&threadPoolCond);
+
     pthread_mutex_destroy(&readWriteMutex);
     pthread_cond_destroy(&updateCond);
+
     pthread_mutex_destroy(&tidMutex);
     puts("<SERVER> Distrutti mutex e cond");
 
@@ -120,9 +126,8 @@ void * threadHandler(void * arg) {
             pClient = dequeue();
         }
         pthread_mutex_unlock(&threadPoolMutex);
-        if (pClient != NULL) {
+        if (pClient != NULL)
             requestHandler(pClient);
-        }
     }
 }
 
@@ -142,12 +147,7 @@ void requestHandler(int * clientSocket) {
         switch (packet.request) {
         case 1:
             // Ask permission to add accessory
-            sem_wait(readSem);
-            readCount++;
-            if (readCount == 1)
-                pthread_mutex_lock(&readWriteMutex);
-            sem_post(readSem);
-
+            startReading();
             OKtoConnect = true;
             if (homeIndex >= MAX_ACCESSORIES) {
                 puts("\t\t<Thread> Numero massimo dispositivi raggiunto");
@@ -158,75 +158,47 @@ void requestHandler(int * clientSocket) {
                 OKtoConnect = false;
             }
             send(newSocketFD, &OKtoConnect, sizeof(bool), 0);
-
-            sem_wait(readSem);
-            readCount--;
-            if (readCount == 0)
-                pthread_mutex_unlock(&readWriteMutex);
-            sem_post(readSem);
+            endReading();
             break;
         case 2:
             // Read status of one accessory
-            sem_wait(readSem);
-            readCount++;
-            if (readCount == 1)
-                pthread_mutex_lock(&readWriteMutex);
-            sem_post(readSem);
-
-            for (int i = 0; i < MAX_ACCESSORIES; i++) {
+            startReading();
+            for (int i = 0; i < MAX_ACCESSORIES; i++)
                 if (strcmp(packet.accessory.name, home[i].name) == 0) {
                     wasFound = true;
                     send(newSocketFD, &home[i].status, sizeof(home[i].status), 0);
                     break;
                 }
-            }
             if (!wasFound)
                 send(newSocketFD, &notFound, sizeof(int), 0);
-            
-            sem_wait(readSem);
-            readCount--;
-            if (readCount == 0)
-                pthread_mutex_unlock(&readWriteMutex);
-            sem_post(readSem);
+            endReading();
             break;
         case 3:
             // Read status of all accessories
-            sem_wait(readSem);
-            readCount++;
-            if (readCount == 1)
-                pthread_mutex_lock(&readWriteMutex);
-            sem_post(readSem);
-
+            startReading();
             for (int i = 0; i < MAX_ACCESSORIES; i++) {
                 send(newSocketFD, &home[i].name, sizeof(home[i].name), 0);
                 send(newSocketFD, &home[i].status, sizeof(home[i].status), 0);
             }
-
-            sem_wait(readSem);
-            readCount--;
-            if (readCount == 0)
-                pthread_mutex_unlock(&readWriteMutex);
-            sem_post(readSem);
+            endReading();
             break;
         case 4:
             // Update status of one accessory
             pthread_mutex_lock(&readWriteMutex);
-            for (int i = 0; i < MAX_ACCESSORIES; i++) {
+            for (int i = 0; i < MAX_ACCESSORIES; i++)
                 if (strcmp(packet.accessory.name, home[i].name) == 0) {
                     home[i].status = packet.accessory.status;
                     pthread_cond_broadcast(&updateCond);
                     printf("\t\t<UPDATE Thread> %s impostato a %d\n", home[i].name, home[i].status);
                     break;
                 }
-            }
             pthread_mutex_unlock(&readWriteMutex);
             break;
         case 5:
             // Delete all accessories
             pthread_mutex_lock(&readWriteMutex);
-            for (int i = 0; i < MAX_ACCESSORIES; i++) {
+            for (int i = 0; i < MAX_ACCESSORIES; i++)
                 home[i].status = DELETED;
-            }
             pthread_cond_broadcast(&updateCond);
             pthread_mutex_unlock(&readWriteMutex);
             joinHomeThreads();
@@ -275,6 +247,22 @@ void requestHandler(int * clientSocket) {
     pthread_exit(EXIT_SUCCESS);
 }
 
+void startReading() {
+    sem_wait(readSem);
+    readCount++;
+    if (readCount == 1)
+        pthread_mutex_lock(&readWriteMutex);
+    sem_post(readSem);
+}
+
+void endReading() {
+    sem_wait(readSem);
+    readCount--;
+    if (readCount == 0)
+        pthread_mutex_unlock(&readWriteMutex);
+    sem_post(readSem);
+}
+
 void initHome() {
     pthread_mutex_lock(&readWriteMutex);
     for (int i = 0; i < MAX_ACCESSORIES; i++) {
@@ -299,23 +287,10 @@ void joinHomeThreads() {
 
 bool checkName(char * newName) {
     bool result = true;
-
-    sem_wait(readSem);
-    readCount++;
-    if (readCount == 1)
-        pthread_mutex_lock(&readWriteMutex);
-    sem_post(readSem);
-
-    for (int i = 0; i < MAX_ACCESSORIES; i++) {
+    startReading();
+    for (int i = 0; i < MAX_ACCESSORIES; i++)
         if (strcmp(newName, home[i].name) == 0)
             result = false;
-    }
-
-    sem_wait(readSem);
-    readCount--;
-    if (readCount == 0)
-        pthread_mutex_unlock(&readWriteMutex);
-    sem_post(readSem);
-
+    endReading();
     return result;
 }
