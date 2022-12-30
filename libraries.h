@@ -22,17 +22,19 @@
 #include <sys/ipc.h>
 #include <sys/sem.h>
 #include <sys/shm.h>
+#include <sys/msg.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#define PORT 21200
+#define PORT 23333
 #define SERVER_BACKLOG 16
 #define MAX_ACCESSORIES 5
 #define EXIT_MENU 8
 #define BUFF_SIZE 128
 #define DELETED -127
 #define THREAD_POOL_SIZE 16
+#define MSG_TYPE 1
 
 #if defined(_SEM_SEMUN_UNDEFINED)
 union semun {
@@ -44,11 +46,10 @@ union semun {
 };
 #endif
 
-struct node {
-    struct node * next;
-    int * clientSocket;
-};
-typedef struct node Node;
+typedef struct {
+    long type;
+    int socket;
+} Message;
 
 typedef struct {
     char name[128];
@@ -71,10 +72,6 @@ typedef struct {
     7 = Add accessory to hub (accessory)
     8 = Exit
 */
-
-// Queue
-void enqueue(int *clientSocket);
-int * dequeue();
 
 // System V semaphores
 int deallocateSem(int semID);

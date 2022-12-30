@@ -8,8 +8,6 @@
 #include "libraries.h"
 
 pthread_t threadPool[THREAD_POOL_SIZE];
-pthread_mutex_t threadPoolMutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t threadPoolCond = PTHREAD_COND_INITIALIZER;
 
 // Reader-writer semaphores
 sem_t * readSem;
@@ -23,12 +21,13 @@ pthread_t homeTIDs[MAX_ACCESSORIES];
 
 pthread_mutex_t tidMutex = PTHREAD_MUTEX_INITIALIZER;
 
-bool serverIsRunning = true;
+pid_t childPID;
+int msgID;
 
 void addrInit(struct sockaddr_in *address, long IPaddr, int port);
 
 void * threadHandler(void * arg); // Handler of the threads in the pool
-void requestHandler(int * clientSocket); // Called inside the thread handler
+void requestHandler(int newSocketFD); // Called inside the thread handler
 
 // Reader-writer problem
 void startReading();
@@ -59,6 +58,9 @@ int main() {
     }
     puts("<SERVER> Allocato semaforo POSIX -progSisOpR-");
 
+    check(msgID = msgget(IPC_PRIVATE, IPC_CREAT | 0666), "msgget");
+    printf("<SERVER> Creata coda di messaggi con ID: %d\n", msgID);
+
     signal(SIGINT, signalHandler);
 
     initHome();
@@ -72,17 +74,27 @@ int main() {
     check(listen(socketFD, SERVER_BACKLOG), "listen");
     printf("<SERVER> in attesa di connessione sulla porta: %d\n", ntohs(serverAddr.sin_port));
 
-    while (serverIsRunning) {
-        clientLen = sizeof(clientAddr);
-        check(newSocketFD = accept(socketFD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen), "accept");
-        printf("<SERVER> Connessione accettata - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
+    switch (childPID = fork()) {
+    case -1:
+        perror("fork");
+        exit(EXIT_FAILURE);
+        break;
+    case 0:
+        while (true) {
+            clientLen = sizeof(clientAddr);
+            check(newSocketFD = accept(socketFD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen), "accept");
+            printf("<SERVER> Connessione accettata - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
 
-        int * pClient = malloc(sizeof(int));
-        *pClient = newSocketFD;
-        pthread_mutex_lock(&threadPoolMutex);
-        enqueue(pClient);
-        pthread_cond_signal(&threadPoolCond);
-        pthread_mutex_unlock(&threadPoolMutex);
+            Message clientSocket;
+            clientSocket.type = MSG_TYPE;
+            printf("socket mandata: %d\n", newSocketFD);
+            clientSocket.socket = newSocketFD;
+            check(msgsnd(msgID, &clientSocket, sizeof(Message), 0), "msgsnd");
+        }
+        break;
+    default:
+        waitpid(childPID, NULL, 0);
+        break;
     }
 
     pthread_mutex_lock(&readWriteMutex);
@@ -100,8 +112,8 @@ int main() {
     check(sem_unlink("progSisOpR"), "sem_unlink");
     puts("<SERVER> Eliminato semaforo POSIX");
 
-    pthread_mutex_destroy(&threadPoolMutex);
-    pthread_cond_destroy(&threadPoolCond);
+    check(msgctl(msgID, IPC_RMID, NULL), "msgctl");
+    puts("<SERVER> Eliminata coda di messaggi");
 
     pthread_mutex_destroy(&readWriteMutex);
     pthread_cond_destroy(&updateCond);
@@ -125,20 +137,14 @@ void addrInit(struct sockaddr_in *address, long IPaddr, int port) {
 
 void * threadHandler(void * arg) {
     while (true) {
-        int * pClient;
-        pthread_mutex_lock(&threadPoolMutex);
-        if ((pClient = dequeue()) == NULL) {
-            pthread_cond_wait(&threadPoolCond, &threadPoolMutex);
-            pClient = dequeue();
-        }
-        pthread_mutex_unlock(&threadPoolMutex);
-        if (pClient != NULL)
-            requestHandler(pClient);
+        Message clientSocket;
+        check(msgrcv(msgID, &clientSocket, sizeof(Message), MSG_TYPE, 0), "msgrcv");
+        printf("socket ricevuta: %d\n", clientSocket.socket);
+        requestHandler(clientSocket.socket);
     }
 }
 
-void requestHandler(int * clientSocket) {
-    int newSocketFD = * clientSocket;
+void requestHandler(int newSocketFD) {
     Packet packet;
     Accessory tempInfo; // case 7: checks if accessory status was updated before broadcast
     bool wasFound = false; // case 2
@@ -270,7 +276,7 @@ void endReading() {
 }
 
 void signalHandler(int sig) {
-    serverIsRunning = false;
+    kill(childPID, SIGKILL);
 }
 
 void initHome() {

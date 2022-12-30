@@ -7,38 +7,6 @@
 
 #include "libraries.h"
 
-// Queue
-Node * head = NULL;
-Node * tail = NULL;
-
-void enqueue(int * clientSocket) {
-    Node * newNode = malloc(sizeof(Node));
-    newNode->clientSocket = clientSocket;
-    newNode->next = NULL;
-    if (tail == NULL) {
-        head = newNode;
-    } else {
-        tail->next = newNode;
-    }
-    tail = newNode;
-}
-
-// returns NULL if the queue is empty.
-// Returns the pointer to a clientSocket, if there is one to get
-int * dequeue() {
-    if (head == NULL) {
-        return NULL;
-    } else {
-        int * result = head->clientSocket;
-        Node * temp = head;
-        head = head->next;
-        if (head == NULL)
-            tail = NULL;
-        free(temp);
-        return result;
-    }
-}
-
 int deallocateSem(int semID) {
     union semun useless;
     return semctl(semID, 0, IPC_RMID, useless);
