@@ -12,8 +12,7 @@ int mainMenu(int semID);
 
 int main() {
     int socketFD, printSemID;
-    struct sockaddr_in serverAddr;
-    struct sockaddr_in clientAddr;
+    struct sockaddr_in serverAddr, clientAddr;
     int clientLen = sizeof(clientAddr);
 
     Packet packet;

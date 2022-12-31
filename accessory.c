@@ -14,8 +14,7 @@ void addrInit(struct sockaddr_in *address, int port);
 
 int main(int argc, const char * argv[]) {
     int socketFD, printSemID;
-    struct sockaddr_in serverAddr;
-    struct sockaddr_in clientAddr;
+    struct sockaddr_in serverAddr, clientAddr;
     int clientLen = sizeof(clientAddr);
 
     check(printSemID = semget(ftok(".", 'x'), 0, 0), "semget accessory");

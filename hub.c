@@ -7,12 +7,15 @@
 
 #include "libraries.h"
 
-struct sockaddr_in clientAddr;
-int socketFD, newSocketFD, clientLen;
-
-pthread_t threadPool[THREAD_POOL_SIZE];
+Accessory home[MAX_ACCESSORIES];
+int homeIndex;
+bool serverIsRunning = true;
 
 int msgID; // Messages queue
+
+pthread_t threadPool[THREAD_POOL_SIZE];
+pthread_t tid; // Current thread running acceptConnection
+pthread_t homeTIDs[MAX_ACCESSORIES]; // Threads updating accessories
 
 // Producer-consumer semaphores
 pthread_mutex_t queueMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -25,37 +28,41 @@ pthread_mutex_t readWriteMutex = PTHREAD_MUTEX_INITIALIZER;
 int readCount = 0;
 pthread_cond_t updateCond = PTHREAD_COND_INITIALIZER; // Broadcasts update to accessory threads
 
-Accessory home[MAX_ACCESSORIES];
-int homeIndex;
-pthread_t homeTIDs[MAX_ACCESSORIES];
+pthread_mutex_t tidMutex = PTHREAD_MUTEX_INITIALIZER; // For accessing homeTIDs
 
-pthread_mutex_t tidMutex = PTHREAD_MUTEX_INITIALIZER;
+struct sockaddr_in clientAddr;
+int socketFD, newSocketFD, clientLen;
 
-bool serverIsRunning = true;
-pthread_t tid;
+void initHome();
+bool checkName(char * newName); // Checks if a name is in the home array
 
-void addrInit(struct sockaddr_in *address, long IPaddr, int port);
+void signalHandler(int sig); // Handles ^C to properly close the server
 
+void joinHomeThreads();
 void * threadHandler(void * arg); // Handler of the threads in the pool
 void requestHandler(int newSocketFD); // Called inside the thread handler
-
-void * acceptConnection(void * arg);
+void * acceptConnection(void * arg); // Thread accepting incoming connection, can be canceled
 
 // Reader-writer problem
 void startReading();
 void endReading();
 
-void signalHandler(int sig);
-
-void initHome();
-void joinHomeThreads();
-bool checkName(char * newName); // Checks if a name is in the home array
+void addrInit(struct sockaddr_in *address, long IPaddr, int port);
 
 int main() {
     int printSemID;
     struct sockaddr_in serverAddr;
 
     puts("\n# Inizio del programma (hub)\n");
+    initHome();
+
+    signal(SIGINT, signalHandler);
+
+    check(msgID = msgget(IPC_PRIVATE, IPC_CREAT | 0666), "msgget");
+    printf("<SERVER> Creata coda di messaggi con ID: %d\n", msgID);
+
+    for (int i = 0; i < THREAD_POOL_SIZE; i++)
+        pthread_create(&threadPool[i], NULL, threadHandler, NULL);
 
     // Semaphore used by device and accessories for printing
     check(printSemID = semget(ftok(".", 'x'), 1, IPC_CREAT /*| IPC_EXCL*/ | 0666), "semget hub");
@@ -68,23 +75,12 @@ int main() {
         perror("sem_open");
         exit(EXIT_FAILURE);
     }
-    puts("<SERVER> Allocato semaforo POSIX -progSisOpE-");
     fullQueueSem = sem_open("progSisOpF", O_CREAT /*| O_EXCL*/, 0666, 0);
     if (fullQueueSem == SEM_FAILED) {
         perror("sem_open");
         exit(EXIT_FAILURE);
     }
-    puts("<SERVER> Allocato semaforo POSIX -progSisOpF-");
-
-    check(msgID = msgget(IPC_PRIVATE, IPC_CREAT | 0666), "msgget");
-    printf("<SERVER> Creata coda di messaggi con ID: %d\n", msgID);
-
-    signal(SIGINT, signalHandler);
-
-    initHome();
-
-    for (int i = 0; i < THREAD_POOL_SIZE; i++)
-        pthread_create(&threadPool[i], NULL, threadHandler, NULL);
+    puts("<SERVER> Allocati semafori POSIX 'progSisOpE' e 'progSisOpF'");
 
     addrInit(&serverAddr, INADDR_ANY, PORT);
     check(socketFD = socket(PF_INET, SOCK_STREAM, 0), "socket");
@@ -124,7 +120,6 @@ int main() {
     pthread_mutex_destroy(&readMutex);
     pthread_mutex_destroy(&readWriteMutex);
     pthread_cond_destroy(&updateCond);
-
     pthread_mutex_destroy(&tidMutex);
     puts("<SERVER> Distrutti mutex e cond");
 
@@ -136,10 +131,41 @@ int main() {
     exit(EXIT_SUCCESS);
 }
 
-void addrInit(struct sockaddr_in *address, long IPaddr, int port) {
-    address->sin_family = AF_INET;
-    address->sin_addr.s_addr = htonl(IPaddr);
-    address->sin_port = htons(port);
+void initHome() {
+    pthread_mutex_lock(&readWriteMutex);
+    for (int i = 0; i < MAX_ACCESSORIES; i++) {
+        strcpy(home[i].name, "");
+        home[i].status = -1;
+        pthread_mutex_lock(&tidMutex);
+        homeTIDs[i] = (pthread_t) -1;
+        pthread_mutex_unlock(&tidMutex);
+    }
+    homeIndex = 0;
+    pthread_mutex_unlock(&readWriteMutex);
+}
+
+bool checkName(char * newName) {
+    bool result = true;
+    startReading();
+    for (int i = 0; i < MAX_ACCESSORIES; i++)
+        if (strcmp(newName, home[i].name) == 0)
+            result = false;
+    endReading();
+    return result;
+}
+
+void signalHandler(int sig) {
+    serverIsRunning = false;
+    pthread_cancel(tid);
+}
+
+void joinHomeThreads() {
+    pthread_mutex_lock(&tidMutex);
+    for (int i = 0; i < MAX_ACCESSORIES; i++)
+        if ((long) homeTIDs[i] >= 0)
+            if (pthread_join(homeTIDs[i], NULL) != 0)
+                perror("pthread_join");
+    pthread_mutex_unlock(&tidMutex);
 }
 
 void * threadHandler(void * arg) {
@@ -238,6 +264,7 @@ void requestHandler(int newSocketFD) {
             printf("\t\t<ADD Thread> Aggiunto %s\n", home[myIndex].name);
             strcpy(tempInfo.name, home[myIndex].name);
             tempInfo.status = home[myIndex].status;
+            // Keeping accessories updated
             while (true) {
                 pthread_cond_wait(&updateCond, &readWriteMutex);
                 if (tempInfo.status != home[myIndex].status) {
@@ -301,39 +328,8 @@ void endReading() {
     pthread_mutex_unlock(&readMutex);
 }
 
-void signalHandler(int sig) {
-    serverIsRunning = false;
-    pthread_cancel(tid);
-}
-
-void initHome() {
-    pthread_mutex_lock(&readWriteMutex);
-    for (int i = 0; i < MAX_ACCESSORIES; i++) {
-        strcpy(home[i].name, "");
-        home[i].status = -1;
-        pthread_mutex_lock(&tidMutex);
-        homeTIDs[i] = (pthread_t) -1;
-        pthread_mutex_unlock(&tidMutex);
-    }
-    homeIndex = 0;
-    pthread_mutex_unlock(&readWriteMutex);
-}
-
-void joinHomeThreads() {
-    pthread_mutex_lock(&tidMutex);
-    for (int i = 0; i < MAX_ACCESSORIES; i++)
-        if ((long) homeTIDs[i] >= 0)
-            if (pthread_join(homeTIDs[i], NULL) != 0)
-                perror("pthread_join");
-    pthread_mutex_unlock(&tidMutex);
-}
-
-bool checkName(char * newName) {
-    bool result = true;
-    startReading();
-    for (int i = 0; i < MAX_ACCESSORIES; i++)
-        if (strcmp(newName, home[i].name) == 0)
-            result = false;
-    endReading();
-    return result;
+void addrInit(struct sockaddr_in *address, long IPaddr, int port) {
+    address->sin_family = AF_INET;
+    address->sin_addr.s_addr = htonl(IPaddr);
+    address->sin_port = htons(port);
 }
