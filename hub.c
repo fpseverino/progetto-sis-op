@@ -9,13 +9,13 @@
 
 Accessory home[MAX_ACCESSORIES];
 int homeIndex;
-bool serverIsRunning = true;
 
 int msgID; // Messages queue
 
 pthread_t threadPool[THREAD_POOL_SIZE];
-pthread_t tid; // Current thread running acceptConnection
-pthread_t homeTIDs[MAX_ACCESSORIES]; // Threads updating accessories
+pthread_t acceptConnectionTID; // Current thread running acceptConnection
+
+sem_t * deleteSem; // Semaphore for waiting conclusion of accessories
 
 // Producer-consumer semaphores
 pthread_mutex_t queueMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -28,8 +28,6 @@ pthread_mutex_t readWriteMutex = PTHREAD_MUTEX_INITIALIZER;
 int readCount = 0;
 pthread_cond_t updateCond = PTHREAD_COND_INITIALIZER; // Broadcasts update to accessory threads
 
-pthread_mutex_t tidMutex = PTHREAD_MUTEX_INITIALIZER; // For accessing homeTIDs
-
 struct sockaddr_in clientAddr;
 int socketFD, newSocketFD, clientLen;
 
@@ -38,10 +36,9 @@ bool checkName(char * newName); // Checks if a name is in the home array
 
 void signalHandler(int sig); // Handles ^C to properly close the server
 
-void joinHomeThreads();
+void * acceptConnection(void * arg); // Thread accepting incoming connection, can be canceled
 void * threadHandler(void * arg); // Handler of the threads in the pool
 void requestHandler(int newSocketFD); // Called inside the thread handler
-void * acceptConnection(void * arg); // Thread accepting incoming connection, can be canceled
 
 // Reader-writer problem
 void startReading();
@@ -61,13 +58,16 @@ int main() {
     check(msgID = msgget(IPC_PRIVATE, IPC_CREAT | 0666), "msgget");
     printf("<SERVER> Creata coda di messaggi con ID: %d\n", msgID);
 
-    for (int i = 0; i < THREAD_POOL_SIZE; i++)
-        pthread_create(&threadPool[i], NULL, threadHandler, NULL);
-
     // Semaphore used by device and accessories for printing
     check(printSemID = semget(ftok(".", 'x'), 1, IPC_CREAT /*| IPC_EXCL*/ | 0666), "semget hub");
     check(initSem(printSemID, 1), "initSem");
     printf("<SERVER> Allocato semaforo System V con ID: %d\n", printSemID);
+
+    deleteSem = sem_open("progSisOpD", O_CREAT /*| O_EXCL*/, 0666, 0);
+    if (deleteSem == SEM_FAILED) {
+        perror("sem_open");
+        exit(EXIT_FAILURE);
+    }
 
     // Semaphore used for solving producer-consumer problem
     emptyQueueSem = sem_open("progSisOpE", O_CREAT /*| O_EXCL*/, 0666, MAX_REQUEST);
@@ -80,7 +80,10 @@ int main() {
         perror("sem_open");
         exit(EXIT_FAILURE);
     }
-    puts("<SERVER> Allocati semafori POSIX 'progSisOpE' e 'progSisOpF'");
+    puts("<SERVER> Allocati semafori POSIX 'progSisOpD', 'progSisOpE' e 'progSisOpF'");
+
+    for (int i = 0; i < THREAD_POOL_SIZE; i++)
+        pthread_create(&threadPool[i], NULL, threadHandler, NULL);
 
     addrInit(&serverAddr, INADDR_ANY, PORT);
     check(socketFD = socket(PF_INET, SOCK_STREAM, 0), "socket");
@@ -88,18 +91,18 @@ int main() {
     check(listen(socketFD, SERVER_BACKLOG), "listen");
     printf("<SERVER> in attesa di connessione sulla porta: %d\n", ntohs(serverAddr.sin_port));
 
-    while (serverIsRunning) {
-        pthread_create(&tid, NULL, acceptConnection, NULL);
-        pthread_join(tid, NULL);
-    }
+    // Main cicle
+    pthread_create(&acceptConnectionTID, NULL, acceptConnection, NULL);
+    pthread_join(acceptConnectionTID, NULL);
 
     pthread_mutex_lock(&readWriteMutex);
     for (int i = 0; i < MAX_ACCESSORIES; i++)
         home[i].status = DELETED;
     pthread_cond_broadcast(&updateCond);
     pthread_mutex_unlock(&readWriteMutex);
-    joinHomeThreads();
-    puts("<SERVER> Eliminati tutti gli accessori");
+    for (int i = 0; i < homeIndex; i++)
+        sem_wait(deleteSem);
+    puts("\n<SERVER> Eliminati tutti gli accessori");
 
     for (int i = 0; i < THREAD_POOL_SIZE; i++)
         pthread_cancel(threadPool[i]);
@@ -111,6 +114,8 @@ int main() {
     deallocateSem(printSemID);
     puts("<SERVER> Deallocato semaforo System V");
 
+    check(sem_close(deleteSem), "sem_close");
+    check(sem_unlink("progSisOpD"), "sem_unlink");
     check(sem_close(emptyQueueSem), "sem_close");
     check(sem_unlink("progSisOpE"), "sem_unlink");
     check(sem_close(fullQueueSem), "sem_close");
@@ -120,7 +125,6 @@ int main() {
     pthread_mutex_destroy(&readMutex);
     pthread_mutex_destroy(&readWriteMutex);
     pthread_cond_destroy(&updateCond);
-    pthread_mutex_destroy(&tidMutex);
     puts("<SERVER> Distrutti mutex e cond");
 
     close(socketFD);
@@ -136,9 +140,6 @@ void initHome() {
     for (int i = 0; i < MAX_ACCESSORIES; i++) {
         strcpy(home[i].name, "");
         home[i].status = -1;
-        pthread_mutex_lock(&tidMutex);
-        homeTIDs[i] = (pthread_t) -1;
-        pthread_mutex_unlock(&tidMutex);
     }
     homeIndex = 0;
     pthread_mutex_unlock(&readWriteMutex);
@@ -155,17 +156,25 @@ bool checkName(char * newName) {
 }
 
 void signalHandler(int sig) {
-    serverIsRunning = false;
-    pthread_cancel(tid);
+    pthread_cancel(acceptConnectionTID);
 }
 
-void joinHomeThreads() {
-    pthread_mutex_lock(&tidMutex);
-    for (int i = 0; i < MAX_ACCESSORIES; i++)
-        if ((long) homeTIDs[i] >= 0)
-            if (pthread_join(homeTIDs[i], NULL) != 0)
-                perror("pthread_join");
-    pthread_mutex_unlock(&tidMutex);
+void * acceptConnection(void * arg) {
+    while (true) {
+        clientLen = sizeof(clientAddr);
+        check(newSocketFD = accept(socketFD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen), "accept");
+        printf("<SERVER> Connessione accettata - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
+
+        Message clientSocket;
+        clientSocket.type = MSG_TYPE;
+        clientSocket.socket = newSocketFD;
+        sem_wait(emptyQueueSem);
+        pthread_mutex_lock(&queueMutex);
+        check(msgsnd(msgID, &clientSocket, sizeof(Message), 0), "msgsnd");
+        pthread_mutex_unlock(&queueMutex);
+        sem_post(fullQueueSem);
+    }
+    pthread_exit(EXIT_SUCCESS);
 }
 
 void * threadHandler(void * arg) {
@@ -237,7 +246,7 @@ void requestHandler(int newSocketFD) {
                 if (strcmp(packet.accessory.name, home[i].name) == 0) {
                     home[i].status = packet.accessory.status;
                     pthread_cond_broadcast(&updateCond);
-                    printf("\t\t<UPDATE Thread> %s impostato a %d\n", home[i].name, home[i].status);
+                    printf("\t\t<Thread> %s impostato a %d\n", home[i].name, home[i].status);
                     break;
                 }
             pthread_mutex_unlock(&readWriteMutex);
@@ -249,7 +258,8 @@ void requestHandler(int newSocketFD) {
                 home[i].status = DELETED;
             pthread_cond_broadcast(&updateCond);
             pthread_mutex_unlock(&readWriteMutex);
-            joinHomeThreads();
+            for (int i = 0; i < homeIndex; i++)
+                sem_wait(deleteSem);
             initHome();
             break;
         case 7:
@@ -258,10 +268,7 @@ void requestHandler(int newSocketFD) {
             myIndex = homeIndex++;
             strcpy(home[myIndex].name, packet.accessory.name);
             home[myIndex].status = 0;
-            pthread_mutex_lock(&tidMutex);
-            homeTIDs[myIndex] = pthread_self();
-            pthread_mutex_unlock(&tidMutex);
-            printf("\t\t<ADD Thread> Aggiunto %s\n", home[myIndex].name);
+            printf("\t\t<Thread> Aggiunto %s\n", home[myIndex].name);
             strcpy(tempInfo.name, home[myIndex].name);
             tempInfo.status = home[myIndex].status;
             // Keeping accessories updated
@@ -270,13 +277,14 @@ void requestHandler(int newSocketFD) {
                 if (tempInfo.status != home[myIndex].status) {
                     send(newSocketFD, &home[myIndex], sizeof(home[myIndex]), 0);
                     tempInfo.status = home[myIndex].status;
-                    printf("\t\t<ADD Thread> Inviato aggiornamento (%d) all'accessorio %s\n", tempInfo.status, tempInfo.name);
+                    printf("\t\t<Thread> Inviato aggiornamento (%d) all'accessorio %s\n", tempInfo.status, tempInfo.name);
                     if (home[myIndex].status == DELETED) {
-                        printf("\t\t<ADD Thread> %s eliminato\n", tempInfo.name);
+                        printf("\t\t<Thread> %s eliminato\n", tempInfo.name);
                         if (close(newSocketFD) == 0)
-                            printf("<Thread> Connessione terminata\n");
+                            printf("<Thread> Connessione accessorio terminata\n");
                         pthread_mutex_unlock(&readWriteMutex);
-                        pthread_exit(EXIT_SUCCESS);
+                        sem_post(deleteSem);
+                        return;
                     }
                 }
             }
@@ -293,23 +301,6 @@ void requestHandler(int newSocketFD) {
 
     if (close(newSocketFD) == 0)
         printf("<Thread> Connessione terminata\n");
-    pthread_exit(EXIT_SUCCESS);
-}
-
-void * acceptConnection(void * arg) {
-    clientLen = sizeof(clientAddr);
-    check(newSocketFD = accept(socketFD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen), "accept");
-    printf("<SERVER> Connessione accettata - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
-
-    Message clientSocket;
-    clientSocket.type = MSG_TYPE;
-    clientSocket.socket = newSocketFD;
-    sem_wait(emptyQueueSem);
-    pthread_mutex_lock(&queueMutex);
-    check(msgsnd(msgID, &clientSocket, sizeof(Message), 0), "msgsnd");
-    pthread_mutex_unlock(&queueMutex);
-    sem_post(fullQueueSem);
-    pthread_exit(EXIT_SUCCESS);
 }
 
 void startReading() {
