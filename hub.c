@@ -7,15 +7,18 @@
 
 #include "libraries.h"
 
-Accessory home[MAX_ACCESSORIES];
-int homeIndex;
+Accessory home[MAX_ACCESSORIES]; // Hold name and status of all accesories connected
+int homeIndex; // Current index of home
 
-int msgID; // Messages queue
+unsigned short * portSHM; // Shared memory sharing port number
+
+int msgID; // Messages queue sending requests to thread pool
 
 pthread_t threadPool[THREAD_POOL_SIZE];
 pthread_t acceptConnectionTID; // Current thread running acceptConnection
 
 sem_t * deleteSem; // Semaphore for waiting conclusion of accessories
+pthread_mutex_t deleteMutex = PTHREAD_MUTEX_INITIALIZER; // Mutex to exclude other threads from waiting on deleteSem
 
 // Producer-consumer semaphores
 pthread_mutex_t queueMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -44,17 +47,51 @@ void requestHandler(int newSocketFD); // Called inside the thread handler
 void startReading();
 void endReading();
 
-void addrInit(struct sockaddr_in *address, long IPaddr, int port);
+void addrInitServer(struct sockaddr_in *address, long IPaddr, int port);
 
-int main() {
-    int printSemID;
+int main(int argc, const char * argv[]) {
+    int shmID, printSemID;
+    unsigned short port;
+    unsigned long longPort;
+    char * endPtr;
+    struct sigaction act;
     struct sockaddr_in serverAddr;
 
     puts("\n# Inizio del programma (hub)\n");
+
+    if (argc <= 1) {
+        puts("<SERVER> Usage: ./hub PORT");
+        exit(EXIT_FAILURE);
+    }
+    longPort = strtoul(argv[1], &endPtr, 10);
+    if (endPtr == argv[1]) {
+        puts("<SERVER> ERRORE: Nessuna cifra trovata");
+        exit(EXIT_FAILURE);
+    } else if (longPort > USHRT_MAX) {
+        puts("<SERVER> ERRORE: Valore troppo grande");
+        exit(EXIT_FAILURE);
+    } else {
+        port = (unsigned short) longPort;
+    }
+
     initHome();
 
-    signal(SIGINT, signalHandler);
+    act.sa_handler = signalHandler;
+    sigemptyset(&act.sa_mask);
+    act.sa_flags = 0;
+    check(sigaction(SIGINT, &act, NULL), "sigaction");
 
+    // Shared memory sharing port number
+    check(shmID = shmget(ftok(".", 'y'), sizeof(unsigned short), IPC_CREAT | 0666), "shmget");
+    portSHM = (unsigned short *) shmat(shmID, NULL, 0);
+    if (portSHM == (void *) -1) {
+        perror("shmat");
+        exit(EXIT_FAILURE);
+    }
+    *portSHM = port;
+    printf("<SERVER> Creata shared memory con ID: %d\n", shmID);
+
+    // Messages queue sending requests to thread pool
     check(msgID = msgget(IPC_PRIVATE, IPC_CREAT | 0666), "msgget");
     printf("<SERVER> Creata coda di messaggi con ID: %d\n", msgID);
 
@@ -63,6 +100,7 @@ int main() {
     check(initSem(printSemID, 1), "initSem");
     printf("<SERVER> Allocato semaforo System V con ID: %d\n", printSemID);
 
+    // Semaphore for waiting conclusion of accessories
     deleteSem = sem_open("progSisOpD", O_CREAT /*| O_EXCL*/, 0666, 0);
     if (deleteSem == SEM_FAILED) {
         perror("sem_open");
@@ -85,7 +123,7 @@ int main() {
     for (int i = 0; i < THREAD_POOL_SIZE; i++)
         pthread_create(&threadPool[i], NULL, threadHandler, NULL);
 
-    addrInit(&serverAddr, INADDR_ANY, PORT);
+    addrInitServer(&serverAddr, INADDR_ANY, *portSHM);
     check(socketFD = socket(PF_INET, SOCK_STREAM, 0), "socket");
     check(bind(socketFD, (struct sockaddr *) &serverAddr, sizeof(serverAddr)), "bind");
     check(listen(socketFD, SERVER_BACKLOG), "listen");
@@ -100,13 +138,19 @@ int main() {
         home[i].status = DELETED;
     pthread_cond_broadcast(&updateCond);
     pthread_mutex_unlock(&readWriteMutex);
+    pthread_mutex_lock(&deleteMutex);
     for (int i = 0; i < homeIndex; i++)
         sem_wait(deleteSem);
+    pthread_mutex_unlock(&deleteMutex);
     puts("\n<SERVER> Eliminati tutti gli accessori");
 
     for (int i = 0; i < THREAD_POOL_SIZE; i++)
         pthread_cancel(threadPool[i]);
     puts("<SERVER> Eliminati tutti i thread della pool");
+
+    check(shmdt((void *) portSHM), "shmdt");
+    check(shmctl(shmID, IPC_RMID, 0), "shmctl");
+    puts("<SERVER> Eliminata shared memory");
 
     check(msgctl(msgID, IPC_RMID, NULL), "msgctl");
     puts("<SERVER> Eliminata coda di messaggi");
@@ -122,6 +166,7 @@ int main() {
     check(sem_unlink("progSisOpF"), "sem_unlink");
     puts("<SERVER> Eliminati semafori POSIX");
 
+    pthread_mutex_destroy(&deleteMutex);
     pthread_mutex_destroy(&readMutex);
     pthread_mutex_destroy(&readWriteMutex);
     pthread_cond_destroy(&updateCond);
@@ -163,7 +208,7 @@ void * acceptConnection(void * arg) {
     while (true) {
         clientLen = sizeof(clientAddr);
         check(newSocketFD = accept(socketFD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen), "accept");
-        printf("<SERVER> Connessione accettata - Porta locale: %d - Porta client: %d\n", PORT, ntohs(clientAddr.sin_port));
+        printf("<SERVER> Connessione accettata - Porta locale: %d - Porta client: %d\n", *portSHM, ntohs(clientAddr.sin_port));
 
         Message clientSocket;
         clientSocket.type = MSG_TYPE;
@@ -258,8 +303,10 @@ void requestHandler(int newSocketFD) {
                 home[i].status = DELETED;
             pthread_cond_broadcast(&updateCond);
             pthread_mutex_unlock(&readWriteMutex);
+            pthread_mutex_lock(&deleteMutex);
             for (int i = 0; i < homeIndex; i++)
                 sem_wait(deleteSem);
+            pthread_mutex_unlock(&deleteMutex);
             initHome();
             break;
         case 7:
@@ -319,7 +366,7 @@ void endReading() {
     pthread_mutex_unlock(&readMutex);
 }
 
-void addrInit(struct sockaddr_in *address, long IPaddr, int port) {
+void addrInitServer(struct sockaddr_in *address, long IPaddr, int port) {
     address->sin_family = AF_INET;
     address->sin_addr.s_addr = htonl(IPaddr);
     address->sin_port = htons(port);

@@ -7,6 +7,13 @@
 
 #include "libraries.h"
 
+void check(int result, char * message) {
+    if (result < 0) {
+        perror(message);
+        exit(EXIT_FAILURE);
+    }
+}
+
 int deallocateSem(int semID) {
     union semun useless;
     return semctl(semID, 0, IPC_RMID, useless);
@@ -36,9 +43,8 @@ int signalSem(int semID) {
     return semop(semID, operations, 1); 
 }
 
-void check(int result, char * message) {
-    if (result < 0) {
-        perror(message);
-        exit(EXIT_FAILURE);
-    }
+void addrInitClient(struct sockaddr_in *address, int port) {
+    address->sin_family = AF_INET;
+    address->sin_port = htons(port);
+    inet_aton("127.0.0.1", &address->sin_addr);
 }

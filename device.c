@@ -7,11 +7,11 @@
 
 #include "libraries.h"
 
-void addrInit(struct sockaddr_in *address, int port);
 int mainMenu(int semID);
 
 int main() {
-    int socketFD, printSemID;
+    int socketFD, shmID, printSemID;
+    unsigned short * portSHM;
     struct sockaddr_in serverAddr, clientAddr;
     int clientLen = sizeof(clientAddr);
 
@@ -24,14 +24,24 @@ int main() {
 
     puts("\n# Inizio del programma (device)\n");
 
+    // Shared memory sharing port number
+    check(shmID = shmget(ftok(".", 'y'), sizeof(unsigned short), 0666), "shmget");
+    portSHM = (unsigned short *) shmat(shmID, NULL, 0);
+    if (portSHM == (void *) -1) {
+        perror("shmat");
+        exit(EXIT_FAILURE);
+    }
+    printf("<SERVER> Ottenuta shared memory con ID: %d\n", shmID);
+
+    // System V semaphore for printing
     check(printSemID = semget(ftok(".", 'x'), 0, 0), "semget device");
     printf("<CLIENT> Ottenuto semaforo con ID: %d\n", printSemID);
 
-    addrInit(&serverAddr, PORT);
+    addrInitClient(&serverAddr, *portSHM);
     check(socketFD = socket(PF_INET, SOCK_STREAM, 0), "socket");
     check(connect(socketFD, (struct sockaddr *) &serverAddr, sizeof(serverAddr)), "connect");
     getsockname(socketFD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen);
-    printf("<CLIENT> Connessione stabilita - Porta server: %d - Porta locale: %d\n", PORT, ntohs(clientAddr.sin_port));
+    printf("<CLIENT> Connessione stabilita - Porta server: %d - Porta locale: %d\n", *portSHM, ntohs(clientAddr.sin_port));
 
     
     while ((packet.request = mainMenu(printSemID)) != EXIT_MENU) {
@@ -115,15 +125,10 @@ int main() {
 
     send(socketFD, &packet, sizeof(Packet), 0);
 
+    check(shmdt((void *) portSHM), "shmdt");
     close(socketFD);
     puts("\n# Fine del programma (device)\n");
     exit(EXIT_SUCCESS);
-}
-
-void addrInit(struct sockaddr_in *address, int port) {
-    address->sin_family = AF_INET;
-    address->sin_port = htons(port);
-    inet_aton("127.0.0.1", &address->sin_addr);
 }
 
 int mainMenu(int semID) {

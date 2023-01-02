@@ -17,16 +17,17 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/ipc.h>
 #include <sys/sem.h>
+#include <sys/shm.h>
 #include <sys/msg.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#define PORT 21000
 #define SERVER_BACKLOG 100
 #define MAX_ACCESSORIES 5
 #define EXIT_MENU 8
@@ -73,12 +74,14 @@ typedef struct {
     8 = Exit
 */
 
+void check(int result, char * message);
+
 // System V semaphores
 int deallocateSem(int semID);
 int initSem(int semID, int initiaValue);
 int waitSem(int semID);
 int signalSem(int semID);
 
-void check(int result, char * message);
+void addrInitClient(struct sockaddr_in *address, int port);
 
 #endif

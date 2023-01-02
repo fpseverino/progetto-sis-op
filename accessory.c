@@ -10,20 +10,28 @@
 Accessory myInfo;
 Packet packet;
 
-void addrInit(struct sockaddr_in *address, int port);
-
 int main(int argc, const char * argv[]) {
-    int socketFD, printSemID;
+    int socketFD, shmID, printSemID;
+    unsigned short * portSHM;
     struct sockaddr_in serverAddr, clientAddr;
     int clientLen = sizeof(clientAddr);
 
+    // Shared memory sharing port number
+    check(shmID = shmget(ftok(".", 'y'), sizeof(unsigned short), 0666), "shmget");
+    portSHM = (unsigned short *) shmat(shmID, NULL, 0);
+    if (portSHM == (void *) -1) {
+        perror("shmat");
+        exit(EXIT_FAILURE);
+    }
+
+    // System V semaphore for printing
     check(printSemID = semget(ftok(".", 'x'), 0, 0), "semget accessory");
 
     strcpy(myInfo.name, argv[1]);
     strcpy(packet.accessory.name, argv[1]);
     packet.request = 7;
 
-    addrInit(&serverAddr, PORT);
+    addrInitClient(&serverAddr, *portSHM);
     check(socketFD = socket(PF_INET, SOCK_STREAM, 0), "socket");
     check(connect(socketFD, (struct sockaddr *) &serverAddr, sizeof(serverAddr)), "connect");
     getsockname(socketFD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen);
@@ -31,14 +39,14 @@ int main(int argc, const char * argv[]) {
     send(socketFD, &packet, sizeof(packet), 0);
 
     waitSem(printSemID);
-    printf("\t<%s> Connessione stabilita - Porta server: %d - Porta locale: %d\n", myInfo.name, PORT, ntohs(clientAddr.sin_port));
+    printf("\t<%s> Connessione stabilita - Porta server: %d - Porta locale: %d\n", myInfo.name, *portSHM, ntohs(clientAddr.sin_port));
     signalSem(printSemID);
     
     while (true) {
         recv(socketFD, &myInfo, sizeof(myInfo), 0);
         waitSem(printSemID);
         if (myInfo.status == DELETED) {
-            printf("\n\t<%s> Eliminato", myInfo.name);
+            printf("\t<%s> Eliminato\n", myInfo.name);
             signalSem(printSemID);
             break;
         } else {
@@ -47,12 +55,7 @@ int main(int argc, const char * argv[]) {
         signalSem(printSemID);
     }
 
+    check(shmdt((void *) portSHM), "shmdt");
     close(socketFD);
     exit(EXIT_SUCCESS);
-}
-
-void addrInit(struct sockaddr_in *address, int port) {
-    address->sin_family = AF_INET;
-    address->sin_port = htons(port);
-    inet_aton("127.0.0.1", &address->sin_addr);
 }
