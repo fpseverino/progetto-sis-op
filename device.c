@@ -16,7 +16,7 @@ int main() {
     int clientLen = sizeof(clientAddr);
 
     Packet packet;
-    pid_t childPID; // pid of the exec process
+    pid_t execPID; // pid of the exec process
     char buff[BUFF_SIZE];
     Accessory tempInfo;
     int accessoryStatus = -1;
@@ -44,7 +44,6 @@ int main() {
     getsockname(socketFD, (struct sockaddr *) &clientAddr, (socklen_t *) &clientLen);
     printf("<DEVICE> Connessione stabilita - Porta server: %d - Porta locale: %d\n", *portSHM, ntohs(clientAddr.sin_port));
 
-    
     while ((packet.request = mainMenu(printSemID)) != EXIT_MENU) {
         switch (packet.request) {
         case 1:
@@ -62,7 +61,7 @@ int main() {
                 break;
             }
             signalSem(printSemID);
-            switch (childPID = fork()) {
+            switch (execPID = fork()) {
             case -1:
                 perror("fork");
                 exit(EXIT_FAILURE);
