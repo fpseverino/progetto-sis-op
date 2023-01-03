@@ -109,7 +109,6 @@ int main() {
             fflush(stdin);
             scanf("%d", &packet.accessory.status);
             send(socketFD, &packet, sizeof(Packet), 0);
-            puts("<DEVICE> Update inviato all'hub");
             signalSem(printSemID);
             break;
         case 5:
