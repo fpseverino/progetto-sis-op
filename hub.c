@@ -50,7 +50,7 @@ void endReading();
 void addrInitServer(struct sockaddr_in *address, long IPaddr, int port);
 
 int main(int argc, const char * argv[]) {
-    int shmID, printSemID;
+    int shmID;
     unsigned short port;
     unsigned long longPort;
     char * endPtr;
@@ -82,7 +82,7 @@ int main(int argc, const char * argv[]) {
     check(sigaction(SIGINT, &act, NULL), "sigaction");
 
     // Shared memory sharing port number
-    check(shmID = shmget(ftok(".", 'y'), sizeof(unsigned short), IPC_CREAT | 0666), "shmget");
+    check(shmID = shmget(ftok(".", 'x'), sizeof(unsigned short), IPC_CREAT | 0666), "shmget");
     portSHM = (unsigned short *) shmat(shmID, NULL, 0);
     if (portSHM == (void *) -1) {
         perror("shmat");
@@ -94,11 +94,6 @@ int main(int argc, const char * argv[]) {
     // Messages queue sending requests to thread pool
     check(msgID = msgget(IPC_PRIVATE, IPC_CREAT | 0666), "msgget");
     printf("<SERVER> Creata coda di messaggi con ID: %d\n", msgID);
-
-    // Semaphore used by device and accessories for printing
-    check(printSemID = semget(ftok(".", 'x'), 1, IPC_CREAT /*| IPC_EXCL*/ | 0666), "semget hub");
-    check(initSem(printSemID, 1), "initSem");
-    printf("<SERVER> Allocato semaforo System V con ID: %d\n", printSemID);
 
     // Semaphore for waiting conclusion of accessories
     deleteSem = sem_open("progSisOpD", O_CREAT /*| O_EXCL*/, 0666, 0);
@@ -154,9 +149,6 @@ int main(int argc, const char * argv[]) {
 
     check(msgctl(msgID, IPC_RMID, NULL), "msgctl");
     puts("<SERVER> Eliminata coda di messaggi");
-
-    deallocateSem(printSemID);
-    puts("<SERVER> Deallocato semaforo System V");
 
     check(sem_close(deleteSem), "sem_close");
     check(sem_unlink("progSisOpD"), "sem_unlink");

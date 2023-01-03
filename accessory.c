@@ -7,17 +7,16 @@
 
 #include "libraries.h"
 
-Accessory myInfo;
-Packet packet;
-
 int main(int argc, const char * argv[]) {
     int socketFD, shmID, printSemID;
     unsigned short * portSHM;
     struct sockaddr_in serverAddr, clientAddr;
     int clientLen = sizeof(clientAddr);
+    Accessory myInfo;
+    Packet packet;
 
     // Shared memory sharing port number
-    check(shmID = shmget(ftok(".", 'y'), sizeof(unsigned short), 0666), "shmget");
+    check(shmID = shmget(ftok(".", 'x'), sizeof(unsigned short), 0666), "shmget");
     portSHM = (unsigned short *) shmat(shmID, NULL, 0);
     if (portSHM == (void *) -1) {
         perror("shmat");
@@ -25,7 +24,7 @@ int main(int argc, const char * argv[]) {
     }
 
     // System V semaphore for printing
-    check(printSemID = semget(ftok(".", 'x'), 0, 0), "semget accessory");
+    check(printSemID = semget(ftok(".", getppid()), 0, 0), "semget accessory");
 
     strcpy(myInfo.name, argv[1]);
     strcpy(packet.accessory.name, argv[1]);
