@@ -10,7 +10,8 @@
 int mainMenu(int semID);
 
 int main() {
-    int socketFD, shmID, printSemID;
+    int socketFD, shmID, printSemID, status;
+    int childNum = 0;
     unsigned short * portSHM;
     struct sockaddr_in serverAddr, clientAddr;
     int clientLen = sizeof(clientAddr);
@@ -71,6 +72,7 @@ int main() {
                 exit(EXIT_SUCCESS);
                 break;
             default:
+                childNum++;
                 break;
             }
             break;
@@ -114,6 +116,11 @@ int main() {
         case 5:
             // Delete all accessories
             send(socketFD, &packet, sizeof(Packet), 0);
+            for (int i = 0; i < childNum; i++) {
+                wait(&status);
+                printf("<DEVICE> Exit status accessorio: %d\n", status);
+            }
+            childNum = 0;
             break;
         default:
             puts("\n<DEVICE> Richiesta non definita");
