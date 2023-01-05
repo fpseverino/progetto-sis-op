@@ -11,21 +11,20 @@ int mainMenu(int semID);
 
 int main() {
     int socketFD, shmID, printSemID, status;
-    int childNum = 0;
-    unsigned short * portSHM;
+    int childNum = 0; // Number of accessories launched
+    unsigned short * portSHM; // Shared memory sharing port number
     struct sockaddr_in serverAddr, clientAddr;
     int clientLen = sizeof(clientAddr);
 
     Packet packet;
     pid_t execPID; // pid of the exec process
     char buff[BUFF_SIZE];
-    Accessory tempInfo;
-    int accessoryStatus = -1;
-    bool OKtoConnect;
+    bool OKtoConnect; // case 1
+    int accessoryStatus = -1; // case 2
+    Accessory tempInfo; // case 3
 
     puts("\n# Inizio del programma (device)\n");
 
-    // Shared memory sharing port number
     check(shmID = shmget(ftok(".", 'x'), sizeof(unsigned short), 0666), "shmget");
     portSHM = (unsigned short *) shmat(shmID, NULL, 0);
     if (portSHM == (void *) -1) {

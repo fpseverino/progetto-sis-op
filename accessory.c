@@ -9,13 +9,12 @@
 
 int main(int argc, const char * argv[]) {
     int socketFD, shmID, printSemID;
-    unsigned short * portSHM;
+    unsigned short * portSHM; // Shared memory sharing port number
     struct sockaddr_in serverAddr, clientAddr;
     int clientLen = sizeof(clientAddr);
     Accessory myInfo;
     Packet packet;
 
-    // Shared memory sharing port number
     check(shmID = shmget(ftok(".", 'x'), sizeof(unsigned short), 0666), "shmget");
     portSHM = (unsigned short *) shmat(shmID, NULL, 0);
     if (portSHM == (void *) -1) {
@@ -28,7 +27,7 @@ int main(int argc, const char * argv[]) {
 
     strcpy(myInfo.name, argv[1]);
     strcpy(packet.accessory.name, argv[1]);
-    packet.request = 7;
+    packet.request = 6;
 
     addrInitClient(&serverAddr, *portSHM);
     check(socketFD = socket(PF_INET, SOCK_STREAM, 0), "socket");

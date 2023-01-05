@@ -20,12 +20,12 @@ pthread_t acceptConnectionTID; // Current thread running acceptConnection
 sem_t * deleteSem; // Semaphore for waiting conclusion of accessories
 pthread_mutex_t deleteMutex = PTHREAD_MUTEX_INITIALIZER; // Mutex to exclude other threads from waiting on deleteSem
 
-// Producer-consumer semaphores
+// Semaphores used for solving producer-consumer problem
 pthread_mutex_t queueMutex = PTHREAD_MUTEX_INITIALIZER;
 sem_t * emptyQueueSem;
 sem_t * fullQueueSem;
 
-// Reader-writer mutexes
+// Mutexes used for solving reader-writer problem
 pthread_mutex_t readMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t readWriteMutex = PTHREAD_MUTEX_INITIALIZER;
 int readCount = 0;
@@ -59,6 +59,7 @@ int main(int argc, const char * argv[]) {
 
     puts("\n# Inizio del programma (hub)\n");
 
+    // Get port number from command line
     if (argc <= 1) {
         puts("<SERVER> Usage: ./hub PORT");
         exit(EXIT_FAILURE);
@@ -81,7 +82,6 @@ int main(int argc, const char * argv[]) {
     act.sa_flags = 0;
     check(sigaction(SIGINT, &act, NULL), "sigaction");
 
-    // Shared memory sharing port number
     check(shmID = shmget(ftok(".", 'x'), sizeof(unsigned short), IPC_CREAT | 0666), "shmget");
     portSHM = (unsigned short *) shmat(shmID, NULL, 0);
     if (portSHM == (void *) -1) {
@@ -91,18 +91,15 @@ int main(int argc, const char * argv[]) {
     *portSHM = port;
     printf("<SERVER> Creata shared memory con ID: %d\n", shmID);
 
-    // Messages queue sending requests to thread pool
     check(msgID = msgget(IPC_PRIVATE, IPC_CREAT | 0666), "msgget");
     printf("<SERVER> Creata coda di messaggi con ID: %d\n", msgID);
 
-    // Semaphore for waiting conclusion of accessories
     deleteSem = sem_open("progSisOpD", O_CREAT /*| O_EXCL*/, 0666, 0);
     if (deleteSem == SEM_FAILED) {
         perror("sem_open");
         exit(EXIT_FAILURE);
     }
 
-    // Semaphore used for solving producer-consumer problem
     emptyQueueSem = sem_open("progSisOpE", O_CREAT /*| O_EXCL*/, 0666, MAX_REQUEST);
     if (emptyQueueSem == SEM_FAILED) {
         perror("sem_open");
@@ -301,7 +298,7 @@ void requestHandler(int newSocketFD) {
             pthread_mutex_unlock(&deleteMutex);
             initHome();
             break;
-        case 7:
+        case 6:
             // Add accessory to hub
             pthread_mutex_lock(&readWriteMutex);
             myIndex = homeIndex++;

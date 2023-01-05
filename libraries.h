@@ -28,14 +28,14 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#define SERVER_BACKLOG 100
-#define MAX_ACCESSORIES 5
-#define EXIT_MENU 8
+#define SERVER_BACKLOG 100 // listen()
+#define MAX_ACCESSORIES 5 // lenght of home array
+#define EXIT_MENU 7
 #define BUFF_SIZE 128
-#define DELETED -127
+#define DELETED -127 // if an accessory gets this status, it's about to get deleted
 #define THREAD_POOL_SIZE 16
 #define MSG_TYPE 1
-#define MAX_REQUEST 32
+#define MAX_REQUEST 32 // "size" of messages queue (producer-consumer problem)
 
 #if defined(_SEM_SEMUN_UNDEFINED)
 union semun {
@@ -47,16 +47,19 @@ union semun {
 };
 #endif
 
+// Messages queue struct
 typedef struct {
     long type;
     int socket;
 } Message;
 
+// Struct holding accessory info
 typedef struct {
     char name[128];
     int status;
 } Accessory;
 
+// Packet for sending accessory info with a request number
 typedef struct {
     int request;
     Accessory accessory;
@@ -64,14 +67,13 @@ typedef struct {
 
 /*
     Packet.request
-    1 = Ask permission to add accessory (Add accessory) (device)
+    1 = Ask permission to add accessory (sent by device)
     2 = Read status of one accessory
     3 = Read status of all accessories
     4 = Update status of one accessory
     5 = Delete all accessories
-    6 = 
-    7 = Add accessory to hub (accessory)
-    8 = Exit
+    6 = Add accessory to hub (sent by accessory)
+    7 = Exit
 */
 
 void check(int result, char * message);
