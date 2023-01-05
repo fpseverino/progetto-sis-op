@@ -148,7 +148,7 @@ int mainMenu(int semID) {
         " 3 - Visualizza elenco accessori\n"
         " 4 - Aggiorna accessorio\n"
         " 5 - Elimina tutti gli accessori\n"
-        " 8 - Uscita\n? ");
+        " 6 - Uscita\n? ");
     int choice;
     fflush(stdin);
     scanf("%d", &choice);

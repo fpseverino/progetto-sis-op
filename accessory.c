@@ -27,7 +27,7 @@ int main(int argc, const char * argv[]) {
 
     strcpy(myInfo.name, argv[1]);
     strcpy(packet.accessory.name, argv[1]);
-    packet.request = 6;
+    packet.request = 7;
 
     addrInitClient(&serverAddr, *portSHM);
     check(socketFD = socket(PF_INET, SOCK_STREAM, 0), "socket");

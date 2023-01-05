@@ -30,7 +30,7 @@
 
 #define SERVER_BACKLOG 100 // listen()
 #define MAX_ACCESSORIES 5 // lenght of home array
-#define EXIT_MENU 7
+#define EXIT_MENU 6
 #define BUFF_SIZE 128
 #define DELETED -127 // if an accessory gets this status, it's about to get deleted
 #define THREAD_POOL_SIZE 16
@@ -72,8 +72,8 @@ typedef struct {
     3 = Read status of all accessories
     4 = Update status of one accessory
     5 = Delete all accessories
-    6 = Add accessory to hub (sent by accessory)
-    7 = Exit
+    6 = Exit
+    7 = Add accessory to hub (sent by accessory)
 */
 
 void check(int result, char * message);

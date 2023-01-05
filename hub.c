@@ -298,7 +298,7 @@ void requestHandler(int newSocketFD) {
             pthread_mutex_unlock(&deleteMutex);
             initHome();
             break;
-        case 6:
+        case 7:
             // Add accessory to hub
             pthread_mutex_lock(&readWriteMutex);
             myIndex = homeIndex++;
