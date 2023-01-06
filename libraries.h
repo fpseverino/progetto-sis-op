@@ -27,6 +27,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/wait.h>
 
 #define SERVER_BACKLOG 100 // listen()
 #define MAX_ACCESSORIES 5 // lenght of home array
