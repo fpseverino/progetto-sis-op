@@ -221,6 +221,7 @@ void * threadHandler(void * arg) {
         sem_post(emptyQueueSem);
         requestHandler(clientSocket.socket);
     }
+    pthread_exit(EXIT_SUCCESS);
 }
 
 void requestHandler(int newSocketFD) {
