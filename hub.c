@@ -40,7 +40,7 @@ bool checkName(char * newName); // Checks if a name is in the home array
 void signalHandler(int sig); // Handles ^C to properly close the server
 
 void * acceptConnection(void * arg); // Thread accepting incoming connection, can be canceled
-void * threadHandler(void * arg); // Handler of the threads in the pool
+void * threadFunction(void * arg); // Function of the threads in the pool
 void requestHandler(int newSocketFD); // Called inside the thread handler
 
 // Reader-writer problem
@@ -113,7 +113,7 @@ int main(int argc, const char * argv[]) {
     puts("<SERVER> Allocati semafori POSIX 'progSisOpD', 'progSisOpE' e 'progSisOpF'");
 
     for (int i = 0; i < THREAD_POOL_SIZE; i++)
-        pthread_create(&threadPool[i], NULL, threadHandler, NULL);
+        pthread_create(&threadPool[i], NULL, threadFunction, NULL);
 
     addrInitServer(&serverAddr, INADDR_ANY, *portSHM);
     check(socketFD = socket(PF_INET, SOCK_STREAM, 0), "socket");
@@ -211,7 +211,7 @@ void * acceptConnection(void * arg) {
     pthread_exit(EXIT_SUCCESS);
 }
 
-void * threadHandler(void * arg) {
+void * threadFunction(void * arg) {
     while (true) {
         Message clientSocket;
         sem_wait(fullQueueSem);
