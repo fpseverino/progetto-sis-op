@@ -1,9 +1,9 @@
 # progetto-sis-op
-## Corso di Sistemi Operativi UNIKORE A.A. 2022/2023 - Progetto di fine semestre
+Corso di Sistemi Operativi UNIKORE A.A. 2022/2023 - Progetto di fine semestre
 
-### Simulazione di casa intelligente in C
+## Simulazione di casa intelligente in C
 
-#### Descrizione dettagliata
+### Descrizione dettagliata
 Il progetto, di cui alla relazione seguente, prevede la creazione di un server multithread e dei relativi client che simulano il funzionamento di dispositivi di domotica usando il protocollo di comunicazione TCP/IP.
 Il progetto è composto da quattro file di codice sorgente in linguaggio C (`hub.c`, `device.c`, `accessory.c`, `libraries.c`) e da un file header (`libraries.h`).
 Il server gestisce le richieste dei client che riceve sotto forma di packet, definiti da una struct apposita, assegnando ogni connessione a un thread di una thread pool.
@@ -35,7 +35,7 @@ Nel file `libraries.h` vengono dichiarate tre struct:
   - 6 per chiudere il _device_,
   - 7, la richiesta inviata dai processi _accessory_ per connettersi al server.
 
-#### System call utilizzate
+### System call utilizzate
 - processi (`fork`, `exit`):
 
 Il processo _device_, dopo aver ricevuto l’ok dal server, crea con la `fork()` un processo figlio, che tramite `exec` avvia il processo _accessory_. La system call `exit()` viene utilizzata sia per interrompere l’esecuzione dei vari processi quando concludono tutte le operazioni con successo, sia nella funzione `check`, che in caso di errore, di una qualsiasi funzione o system call, lo stampa con `perror` e chiama la `exit` con status `EXIT_FAILURE`.
@@ -76,7 +76,7 @@ Viene implementata una variabile condizione nell’_hub_, legata al mutex lettur
 
 non utilizzati.
 
-#### Funzioni implementate
+### Funzioni implementate
 Funzioni in `hub.c`:
 ```c
 void homeInit();
